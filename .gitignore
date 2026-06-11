@@ -1,0 +1,28 @@
+# R
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# R package build artifacts
+*.tar.gz
+*.zip
+src/*.o
+src/*.so
+src/*.dll
+/doc/
+/Meta/
+
+# Dados locais do usuário (gerados em tempo de execução)
+inst/app/data/precos_referencia_local.csv
+
+# IDE
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+.httr-oauth
+.quarto

@@ -1,0 +1,17 @@
+produto,nutriente,teor,preco_ref,unidade,fonte,data_ref
+Ureia (45% N),N,0.45,2.80,R$/kg,Referência interna,2025-01
+Sulfato de Amônio (21% N),N,0.21,2.20,R$/kg,Referência interna,2025-01
+Nitrato de Amônio (33% N),N,0.33,3.50,R$/kg,Referência interna,2025-01
+MAP (10% N),N,0.10,4.20,R$/kg,Referência interna,2025-01
+DAP (18% N),N,0.18,4.50,R$/kg,Referência interna,2025-01
+Nitrato de Cálcio (15,5% N),N,0.155,5.50,R$/kg,Referência interna,2025-01
+Superfosfato Simples (18% P₂O₅),P2O5,0.18,1.80,R$/kg,Referência interna,2025-01
+Superfosfato Triplo (46% P₂O₅),P2O5,0.46,3.20,R$/kg,Referência interna,2025-01
+MAP (48% P₂O₅),P2O5,0.48,4.20,R$/kg,Referência interna,2025-01
+DAP (46% P₂O₅),P2O5,0.46,4.50,R$/kg,Referência interna,2025-01
+Termofosfato (17% P₂O₅),P2O5,0.17,1.50,R$/kg,Referência interna,2025-01
+Fosfato Natural Reativo (30% P₂O₅),P2O5,0.30,1.20,R$/kg,Referência interna,2025-01
+KCl (60% K₂O),K2O,0.60,2.90,R$/kg,Referência interna,2025-01
+Sulfato de Potássio (50% K₂O),K2O,0.50,5.80,R$/kg,Referência interna,2025-01
+KMag (22% K₂O),K2O,0.22,4.20,R$/kg,Referência interna,2025-01
+Nitrato de Potássio (45% K₂O),K2O,0.45,8.50,R$/kg,Referência interna,2025-01
