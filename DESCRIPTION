@@ -1,20 +1,20 @@
 Package: GEMSFertilizer
 Title: Sistema de Recomendacao de Adubacao e Calagem para Culturas Agricolas
-Version: 0.1.0
+Version: 0.2.0
 Date: 2025-01-01
 Authors@R: 
     person(
       given   = "GEMS",
       family  = "Research Group",
       role    = c("aut", "cre"),
-      email   = "contato@gems.agro.br",
-      comment = c(ORCID = "")
+      email   = "gustavooliveira@academico.ufs.br",
+      comment = c(ORCID = "0000-0002-3839-6261")
     )
 Description: 
     Aplicativo Shiny interativo para recomendacao de adubacao mineral (N, P2O5, K2O),
     calagem e gessagem de culturas agricolas. Baseado no Manual de Adubacao e Calagem
     para Minas Gerais - 5a Aproximacao (2023) e no Manual de Recomendacoes de Adubacao
-    e Calagem do Estado de Sergipe (EMBRAPA/UFS). Inclui modulo de pesquisa agricola
+    e Calagem do Estado de Sergipe (EMBRAPA). Inclui modulo de pesquisa agricola
     com conversao de doses por hectare para unidades experimentais (metro linear, cova,
     vaso e parcela), busca de precos de fertilizantes via CEPEA/AgroLink, e graficos
     interativos de fertilidade do solo. Culturas suportadas: milho, feijao,
@@ -24,7 +24,6 @@ URL: https://github.com/seu_usuario/GEMSFertilizer
 BugReports: https://github.com/seu_usuario/GEMSFertilizer/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.1
 Depends:
     R (>= 4.1.0)
 Imports:
@@ -41,9 +40,14 @@ Imports:
     jsonlite (>= 1.8.0),
     stringr (>= 1.5.0),
     shinycssloaders (>= 1.0.0),
-    rvest (>= 1.0.0)
+    rvest (>= 1.0.0),
+    leaflet (>= 2.1.0),
+    readxl (>= 1.4.0)
 Suggests:
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    geobr,
+    sf
 VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0

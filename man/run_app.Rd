@@ -18,9 +18,11 @@ Use \code{"0.0.0.0"} para expor na rede local.}
 
 \item{port}{Porta TCP. Padrao: porta aleatoria disponivel.}
 
-\item{launch.browser}{Se \code{TRUE} (padrao), abre o navegador automaticamente.}
+\item{launch.browser}{Se \code{TRUE} (padrao), abre o navegador
+automaticamente.}
 
-\item{display.mode}{Modo de exibicao do Shiny. Padrao: \code{"normal"}.}
+\item{display.mode}{Modo de exibicao do Shiny. Padrao:
+\code{"normal"}.}
 
 \item{...}{Argumentos adicionais passados para \code{\link[shiny]{runApp}}.}
 }
@@ -36,7 +38,8 @@ padrao do sistema.
   # Iniciar o app normalmente
   GEMSFertilizer::run_app()
 
-  # Expor na rede local (ex: uso em laboratorio ou servidor)
+  # Expor na rede local (ex: uso em laboratorio)
   GEMSFertilizer::run_app(host = "0.0.0.0", port = 3838)
 }
+
 }

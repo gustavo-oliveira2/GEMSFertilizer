@@ -19,17 +19,23 @@ ui <- fluidPage(
   div(class = "app-header",
     div(class = "header-inner",
       div(class = "logo-group",
-        # Logo: coloque seu arquivo em www/logo_gems.png
-        # Se o arquivo existir, exibe a imagem; caso contrário, usa ícone fallback
-        if (file.exists("www/logo_gems.png") || file.exists("www/logo_gems.svg")) {
-          ext <- ifelse(file.exists("www/logo_gems.svg"), "svg", "png")
-          tags$img(
-            src   = paste0("logo_gems.", ext),
-            class = "logo-img",
-            alt   = "GEMS Logo"
+        {
+          www_local <- file.path(getwd(), "www")
+          www_pkg   <- tryCatch(
+            system.file("app", "www", package = "GEMSFertilizer"),
+            error = function(e) ""
           )
-        } else {
-          div(class = "logo-icon", HTML('<i class="bi bi-gem"></i>'))
+          tem_svg <- file.exists(file.path(www_local, "logo_gems.svg")) ||
+                     (nchar(www_pkg) > 0 && file.exists(file.path(www_pkg, "logo_gems.svg")))
+          tem_png <- file.exists(file.path(www_local, "logo_gems.png")) ||
+                     (nchar(www_pkg) > 0 && file.exists(file.path(www_pkg, "logo_gems.png")))
+
+          if (tem_svg || tem_png) {
+            ext <- if (tem_svg) "svg" else "png"
+            tags$img(src = paste0("logo_gems.", ext), class = "logo-img", alt = "GEMS Logo")
+          } else {
+            div(class = "logo-icon", HTML('<i class="bi bi-gem"></i>'))
+          }
         },
         div(
           h1("GEMS_Fertilizer", class = "app-title"),
@@ -307,7 +313,8 @@ ui <- fluidPage(
           actionButton("tab_adubacao", HTML('<i class="bi bi-bag-fill"></i> Aduba\u00e7\u00e3o'), class = "tab-btn"),
           actionButton("tab_financeiro", HTML('<i class="bi bi-currency-dollar"></i> Custos'), class = "tab-btn"),
           actionButton("tab_graficos", HTML('<i class="bi bi-bar-chart-fill"></i> Gr\u00e1ficos'), class = "tab-btn"),
-          actionButton("tab_pesquisa", HTML('<i class="bi bi-journal-medical"></i> Pesquisa'), class = "tab-btn")
+          actionButton("tab_pesquisa", HTML('<i class="bi bi-journal-medical"></i> Pesquisa'), class = "tab-btn"),
+          actionButton("tab_regional", HTML('<i class="bi bi-map-fill"></i> Banco Regional'), class = "tab-btn")
         )
       ),
       
@@ -340,14 +347,20 @@ ui <- fluidPage(
               HTML('<i class="bi bi-cloud-download"></i> Buscar preços CEPEA/AgroLink'),
               class = "btn-cepea"
             ),
+            actionButton("btn_menor_preco_modal",
+              HTML('<i class="bi bi-search"></i> Menor Pre\u00e7o Brasil'),
+              class = "btn-menor-preco"
+            ),
             actionButton("btn_salvar_precos",
-              HTML('<i class="bi bi-floppy"></i> Salvar preços'),
+              HTML('<i class="bi bi-floppy"></i> Salvar pre\u00e7os'),
               class = "btn-salvar-precos"
             )
           )
         ),
-        # Feedback do scraping
+        # Feedback do scraping CEPEA
         uiOutput("cepea_feedback"),
+        # Painel Menor Preço Brasil
+        uiOutput("menor_preco_painel"),
         # Tabela editável de preços
         div(class = "result-card",
           div(class = "result-card-title",
@@ -391,9 +404,25 @@ ui <- fluidPage(
           div(
             h3(class = "pesq-header-title", "Modo Pesquisa Agr\u00edcola"),
             p(class = "pesq-header-sub",
-              "Converte doses ha\u207b\u00b9 para unidades experimentais: metro linear, cova, vaso e parcela")
+              "Doses experimentais, an\u00e1lises estat\u00edsticas e calibra\u00e7\u00e3o de limiares cr\u00edticos")
           )
         ),
+
+        # Sub-navegação: Modo Experimental | Análises Estatísticas
+        div(class = "pesq-subtabs",
+          selectInput("pesq_submodulo", NULL, width = "320px",
+            choices = c(
+              "\U0001F9EA Modo Experimental (doses)" = "experimental",
+              "\U0001F4CA An\u00e1lises Estat\u00edsticas"     = "estatistica"
+            )
+          )
+        ),
+
+        # ======================================================================
+        # SUB-PAINEL: MODO EXPERIMENTAL (doses)
+        # ======================================================================
+        conditionalPanel(
+          condition = "input.pesq_submodulo == 'experimental'",
 
         # Configurações do experimento
         div(class = "result-card",
@@ -525,6 +554,54 @@ ui <- fluidPage(
 
         # Resultados pesquisa
         uiOutput("resultado_pesquisa")
+
+        ),  # fim conditionalPanel experimental
+
+        # ======================================================================
+        # SUB-PAINEL: ANÁLISES ESTATÍSTICAS
+        # ======================================================================
+        conditionalPanel(
+          condition = "input.pesq_submodulo == 'estatistica'",
+
+          uiOutput("pesq_estat_conteudo")
+        )
+      ),
+
+      # PAINEL BANCO REGIONAL
+      div(id = "painel_regional", class = "results-panel",
+
+        # Cabeçalho
+        div(class = "pesq-header", style = "background: linear-gradient(135deg, #0d3349, #1a5276);",
+          div(class = "pesq-header-icon", HTML('<i class="bi bi-map-fill"></i>')),
+          div(
+            h3(class = "pesq-header-title", "Banco Regional de Fertilidade"),
+            p(class = "pesq-header-sub",
+              "Estat\u00edsticas, mapas e benchmarking a partir de an\u00e1lises hist\u00f3ricas da regi\u00e3o")
+          )
+        ),
+
+        # Upload do arquivo
+        div(class = "result-card",
+          div(class = "result-card-title",
+            HTML('<i class="bi bi-cloud-upload"></i> Carregar Banco de Dados')),
+          p(style = "font-size:12px; color:#888; margin-bottom:10px;",
+            HTML('<i class="bi bi-info-circle"></i> Envie o arquivo <b>template_banco_regional.xlsx</b> preenchido ',
+                 '(aba "Dados"). Requer os pacotes <code>readxl</code> e, para mapas, ',
+                 '<code>geobr</code>, <code>sf</code> e <code>leaflet</code>.')),
+          a(href = "template_banco_regional.xlsx", download = NA, target = "_blank",
+            class = "btn-cepea", style = "display:inline-flex; margin-bottom:10px; margin-right:8px;",
+            HTML('<i class="bi bi-download"></i> Baixar template em branco')),
+          a(href = "banco_regional_EXEMPLO.xlsx", download = NA, target = "_blank",
+            class = "btn-cepea", style = "display:inline-flex; margin-bottom:10px; background:#6c3483; border-color:#6c3483;",
+            HTML('<i class="bi bi-stars"></i> Baixar planilha de EXEMPLO (140 amostras)')),
+          fileInput("regional_file", NULL, accept = c(".xlsx"), width = "100%",
+            buttonLabel = HTML('<i class="bi bi-folder2-open"></i> Escolher arquivo'),
+            placeholder = "Nenhum arquivo selecionado"),
+          uiOutput("regional_status")
+        ),
+
+        # Conteúdo (aparece após upload)
+        uiOutput("regional_conteudo")
       )
     )
   ),

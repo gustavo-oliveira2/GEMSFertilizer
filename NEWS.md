@@ -1,6 +1,6 @@
 # GEMSFertilizer (development version)
 
-# GEMSFertilizer 0.1.0
+# GEMSFertilizer 0.2.0
 
 ## Primeira versão pública
 
@@ -22,13 +22,14 @@
 
 ### Módulo financeiro
 * Tabela editável de 16 fontes comerciais de N, P₂O₅ e K₂O
-* Busca de preços via CEPEA/ESALQ e AgroLink
+* Busca de preços via CEPEA/ESALQ e AgroLink e Menor Preço Brasil
 * Persistência local de preços via CSV
 
 ### Modo Pesquisa
 * Conversão de doses ha⁻¹ para metro linear, cova, vaso e parcela
 * Cálculo para NPK formulado
 * Tabela de gradiente de tratamentos
+* Análise estatísticas para fertilidade do solo
 
 ### Gráficos
 * Radar de fertilidade (7 parâmetros)
