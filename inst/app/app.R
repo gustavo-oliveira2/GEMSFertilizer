@@ -1,6 +1,6 @@
 # ==============================================================================
-# GEMS_Fertilizer — inst/app/app.R
-# Ponto de entrada quando chamado via GEMSFertilizer::run_app()
+# ADUBO CERTO - Sistema de Recomendação de Adubação e Calagem
+# Baseado no Manual de Minas Gerais (5ª Aproximação) e Manual de Sergipe
 # ==============================================================================
 
 library(shiny)
@@ -17,26 +17,18 @@ library(jsonlite)
 library(stringr)
 library(shinycssloaders)
 library(rvest)
+library(leaflet)
+library(readxl)        # scraping CEPEA/AgroLink
 
-# ------------------------------------------------------------------------------
-# CAMINHO DO CSV DE PREÇOS
-# Quando rodando como pacote usa diretório gravável do usuário (GEMS_PRECOS_DIR).
-# Em desenvolvimento local (runApp direto), usa data/ relativo.
-# ------------------------------------------------------------------------------
-gems_precos_dir <- Sys.getenv("GEMS_PRECOS_DIR", unset = "")
-if (nchar(gems_precos_dir) > 0 && dir.exists(gems_precos_dir)) {
-  PRECOS_CSV <<- file.path(gems_precos_dir, "precos_referencia.csv")
-} else {
-  PRECOS_CSV <<- "data/precos_referencia.csv"
-}
-
-# ------------------------------------------------------------------------------
-# CARREGAR MÓDULOS
-# ------------------------------------------------------------------------------
+# ==============================================================================
+# DADOS E TABELAS TÉCNICAS
+# ==============================================================================
 source("data/tabelas_solo.R")
 source("data/recomendacoes.R")
 source("data/calculos.R")
 source("data/precos.R")
+source("data/banco_regional.R")
+source("data/analises_estatisticas.R")
 
 # Funções auxiliares de UI devem ser carregadas ANTES do objeto ui ser criado
 source("ui/ui_helpers.R")

@@ -34,18 +34,18 @@ estilos_css <- function() {
     --shadow: 0 2px 12px rgba(27,67,50,0.08);
     --shadow-hover: 0 6px 24px rgba(27,67,50,0.14);
   }
-  
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  
+
   body {
     font-family: 'DM Sans', sans-serif;
     background: linear-gradient(135deg, #f0f7f4 0%, #e8f0eb 50%, #f5f0eb 100%);
     min-height: 100vh;
     color: var(--cinza-1);
   }
-  
+
   .shiny-input-container { margin-bottom: 0 !important; }
-  
+
   /* HEADER */
   .app-header {
     background: linear-gradient(135deg, var(--verde-escuro) 0%, var(--verde-medio) 100%);
@@ -103,7 +103,7 @@ estilos_css <- function() {
     backdrop-filter: blur(5px);
     border: 1px solid rgba(255,255,255,0.2);
   }
-  
+
   /* LAYOUT PRINCIPAL */
   .main-container {
     max-width: 1440px;
@@ -114,21 +114,20 @@ estilos_css <- function() {
     gap: 20px;
     align-items: start;
   }
-  
+
   /* PAINEL ESQUERDO */
   .panel-left { display: flex; flex-direction: column; gap: 16px; }
-  
+
   /* CARDS */
   .card-section {
     background: var(--card-bg);
     border-radius: 16px;
     box-shadow: var(--shadow);
-    overflow: hidden;
     border: 1px solid rgba(27,67,50,0.06);
     transition: box-shadow 0.2s;
   }
   .card-section:hover { box-shadow: var(--shadow-hover); }
-  
+
   .card-header-custom {
     background: linear-gradient(135deg, var(--verde-escuro) 0%, var(--verde-medio) 100%);
     color: white;
@@ -139,16 +138,17 @@ estilos_css <- function() {
     align-items: center;
     gap: 8px;
     letter-spacing: 0.3px;
+    border-radius: 16px 16px 0 0;
   }
   .card-header-custom i { font-size: 16px; }
-  
+
   .card-body-custom { padding: 16px; }
-  
+
   /* FORM GROUPS */
   .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
   .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
   .form-group-custom { display: flex; flex-direction: column; gap: 4px; }
-  
+
   .input-label {
     font-size: 11.5px;
     font-weight: 600;
@@ -159,7 +159,7 @@ estilos_css <- function() {
     align-items: center;
     gap: 4px;
   }
-  
+
   .nutrient-group {
     background: var(--cinza-7);
     border-radius: 10px;
@@ -178,7 +178,7 @@ estilos_css <- function() {
     align-items: center;
     gap: 6px;
   }
-  
+
   .section-hint {
     font-size: 11.5px;
     color: var(--cinza-5);
@@ -191,7 +191,7 @@ estilos_css <- function() {
     align-items: center;
     gap: 6px;
   }
-  
+
   /* Inputs estilizados */
   .form-control, .selectize-input, select.form-control {
     border: 1.5px solid var(--cinza-6) !important;
@@ -201,7 +201,8 @@ estilos_css <- function() {
     color: var(--cinza-1) !important;
     transition: border-color 0.2s, box-shadow 0.2s !important;
     background: white !important;
-    height: 34px !important;
+    min-height: 34px !important;
+    height: auto !important;
     padding: 4px 8px !important;
   }
   .form-control:focus, .selectize-input.focus {
@@ -209,7 +210,7 @@ estilos_css <- function() {
     box-shadow: 0 0 0 3px rgba(82,183,136,0.15) !important;
     outline: none !important;
   }
-  
+
   /* BOTÃO CALCULAR */
   .btn-container { padding: 4px 0 8px; }
   .btn-calcular {
@@ -232,20 +233,20 @@ estilos_css <- function() {
     box-shadow: 0 8px 25px rgba(27,67,50,0.4) !important;
   }
   .btn-calcular:active { transform: translateY(0) !important; }
-  
+
   /* PAINEL DIREITO */
   .panel-right {
     background: var(--card-bg);
     border-radius: 16px;
     box-shadow: var(--shadow);
-    overflow: hidden;
     border: 1px solid rgba(27,67,50,0.06);
   }
-  
+
   /* TABS */
   .results-tabs {
     background: linear-gradient(135deg, var(--verde-escuro), var(--verde-medio));
     padding: 12px 16px 0;
+    border-radius: 16px 16px 0 0;
   }
   .tab-list {
     display: flex;
@@ -275,11 +276,11 @@ estilos_css <- function() {
     color: var(--verde-escuro) !important;
     border-color: rgba(255,255,255,0.3) !important;
   }
-  
+
   /* PAINÉIS DE RESULTADO */
   .results-panel { display: none; padding: 24px; }
   .active-panel { display: block; }
-  
+
   /* CARDS DE RESULTADO */
   .result-card {
     background: var(--cinza-7);
@@ -301,7 +302,7 @@ estilos_css <- function() {
     padding-bottom: 8px;
     border-bottom: 2px solid rgba(27,67,50,0.08);
   }
-  
+
   /* MÉTRICAS */
   .metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
   .metric-item {
@@ -322,17 +323,17 @@ estilos_css <- function() {
   }
   .metric-unit { font-size: 10px; color: var(--cinza-5); margin-top: 1px; }
   .metric-name { font-size: 11px; font-weight: 600; color: var(--cinza-4); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
-  .metric-class { 
+  .metric-class {
     display: inline-block;
-    font-size: 10px; 
-    font-weight: 700; 
-    padding: 2px 7px; 
-    border-radius: 20px; 
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
     margin-top: 5px;
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
-  
+
   /* Cores de classe */
   .cl-muito-baixo { background: #fde8e8; color: #c62828; border-color: #f44336; }
   .cl-baixo { background: #fff3e0; color: #e65100; border-color: #ff9800; }
@@ -340,7 +341,7 @@ estilos_css <- function() {
   .cl-bom { background: #e8f5e9; color: #2e7d32; border-color: #4caf50; }
   .cl-muito-bom, .cl-adequado, .cl-excelente { background: #e8f5e9; color: #1b5e20; border-color: #2e7d32; }
   .cl-alcalino, .cl-alto { background: #e3f2fd; color: #1565c0; border-color: #2196f3; }
-  
+
   /* REC ADUBAÇÃO */
   .npk-display { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
   .npk-card {
@@ -355,7 +356,7 @@ estilos_css <- function() {
   .npk-label { font-size: 11px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
   .npk-value { font-family: 'DM Serif Display', serif; font-size: 32px; line-height: 1.1; }
   .npk-unit { font-size: 11px; opacity: 0.75; }
-  
+
   /* TABELA FINANCEIRA */
   .table-financeira { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .table-financeira th {
@@ -376,7 +377,7 @@ estilos_css <- function() {
   }
   .table-financeira tr:hover td { background: var(--verde-palido); }
   .table-financeira tr.melhor-opcao td { background: #e8f5e9; font-weight: 700; }
-  
+
   /* ALERTA CALAGEM */
   .calagem-alerta {
     border-radius: 12px;
@@ -392,12 +393,12 @@ estilos_css <- function() {
   .calagem-icon { font-size: 28px; line-height: 1; }
   .calagem-titulo { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
   .calagem-desc { font-size: 13px; color: var(--cinza-4); }
-  
+
   /* CHARTS GRID */
-  .charts-grid { 
-    display: grid; 
-    grid-template-columns: 1fr 1fr; 
-    gap: 16px; 
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
   }
   .chart-card {
     background: var(--cinza-7);
@@ -416,7 +417,7 @@ estilos_css <- function() {
     align-items: center;
     gap: 6px;
   }
-  
+
   /* PLACEHOLDER */
   .placeholder-msg {
     display: flex;
@@ -430,7 +431,7 @@ estilos_css <- function() {
   .placeholder-icon { font-size: 56px; margin-bottom: 16px; opacity: 0.4; }
   .placeholder-title { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--cinza-3); margin-bottom: 8px; }
   .placeholder-text { font-size: 13px; color: var(--cinza-5); max-width: 300px; line-height: 1.5; }
-  
+
   /* MÉTODOS CALAGEM */
   .metodos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   .metodo-card {
@@ -444,7 +445,7 @@ estilos_css <- function() {
   .metodo-nome { font-size: 10px; color: var(--cinza-4); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px; }
   .metodo-dose { font-family: 'DM Serif Display', serif; font-size: 26px; color: var(--verde-escuro); }
   .metodo-unidade { font-size: 11px; color: var(--cinza-5); }
-  
+
   /* FOOTER */
   .app-footer {
     max-width: 1440px;
@@ -457,12 +458,17 @@ estilos_css <- function() {
     color: var(--cinza-5);
     backdrop-filter: blur(5px);
   }
-  
+
   /* SELECTIZE */
   .selectize-control.single .selectize-input { height: 34px !important; padding: 6px 8px !important; }
-  .selectize-dropdown { font-size: 13px !important; }
+  .selectize-dropdown { font-size: 13px !important; z-index: 9999 !important; }
   .selectize-dropdown-content .option:hover { background: var(--verde-palido) !important; }
-  
+  /* Multi-select: permite que os tags selecionados quebrem linha sem cortar */
+  .selectize-control.multi .selectize-input { flex-wrap: wrap !important; }
+  .selectize-control.multi .selectize-input > div {
+    margin: 2px 4px 2px 0 !important;
+  }
+
   /* DESTAQUE MELHOR PRECO */
   .melhor-preco-badge {
     background: var(--verde-escuro);
@@ -475,7 +481,7 @@ estilos_css <- function() {
     letter-spacing: 0.3px;
     margin-left: 6px;
   }
-  
+
   /* RESPONSIVE */
   @media (max-width: 1100px) {
     .main-container { grid-template-columns: 1fr; }
@@ -567,6 +573,73 @@ estilos_css <- function() {
     background: rgba(255,255,255,0.25) !important;
   }
 
+  /* BOTÃO MENOR PREÇO BRASIL */
+  .btn-menor-preco {
+    background: linear-gradient(135deg, #c0392b, #e74c3c) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    padding: 7px 14px !important;
+    cursor: pointer !important;
+    transition: all 0.25s !important;
+    box-shadow: 0 2px 8px rgba(192,57,43,0.35) !important;
+    white-space: nowrap !important;
+    text-decoration: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+  .btn-menor-preco:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 14px rgba(192,57,43,0.5) !important;
+    color: white !important;
+    text-decoration: none !important;
+  }
+
+  /* Painel de links rápidos do Menor Preço */
+  .menor-preco-panel {
+    background: #fdf2f0;
+    border: 1px solid #f5c6c0;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+  .menor-preco-panel .mp-title {
+    font-weight: 700;
+    color: #922b21;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+  }
+  .menor-preco-panel .mp-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .menor-preco-panel .mp-link {
+    background: white;
+    border: 1px solid #e8b4af;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: #922b21;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  .menor-preco-panel .mp-link:hover {
+    background: #c0392b;
+    color: white;
+    border-color: #c0392b;
+    text-decoration: none;
+  }
+
   /* FEEDBACK CEPEA */
   .cepea-feedback {
     padding: 10px 16px;
@@ -594,7 +667,7 @@ estilos_css <- function() {
   }
   table.dataTable tbody td { padding: 8px 12px !important; }
   table.dataTable tbody tr:hover td { background: var(--verde-palido) !important; }
-  .cell-edit-fld input { 
+  .cell-edit-fld input {
     border: 2px solid var(--verde-claro) !important;
     border-radius: 6px !important;
     padding: 3px 6px !important;
@@ -616,6 +689,32 @@ estilos_css <- function() {
   .pesq-header-icon { font-size: 36px; opacity: 0.9; flex-shrink: 0; }
   .pesq-header-title { font-family: 'DM Serif Display',serif; font-size: 20px; margin: 0 0 4px; color: white; }
   .pesq-header-sub { font-size: 12px; opacity: 0.75; margin: 0; }
+
+  .pesq-subtabs {
+    margin-bottom: 14px;
+  }
+  .pesq-subtabs .selectize-input {
+    border: 2px solid #2c2c7a !important;
+    font-weight: 600 !important;
+    color: #1a1a4e !important;
+  }
+
+  /* Caixa de interpretação automática */
+  .stat-interpretacao {
+    background: #f0f0fa; border-left: 4px solid #2c2c7a;
+    border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 12.5px;
+    color: #2c2c7a; margin-top: 10px; line-height: 1.6;
+  }
+  .stat-erro {
+    background: #fdf2e9; border-left: 4px solid #e67e22;
+    border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 12.5px;
+    color: #a04000;
+  }
+  .stat-badge-n {
+    display: inline-block; background: #2c2c7a; color: white;
+    padding: 2px 9px; border-radius: 12px; font-size: 10px;
+    font-weight: 700; letter-spacing: 0.3px; margin-left: 6px;
+  }
 
   .pesq-config-grid {
     display: grid;
@@ -675,6 +774,91 @@ estilos_css <- function() {
     border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 12px;
     color: #6d4c00; margin-top: 10px;
   }
+
+  /* ================================================================
+     BANCO REGIONAL
+     ================================================================ */
+  .regional-status-ok {
+    background: #eafaf1; border-left: 4px solid #27ae60;
+    border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 12.5px;
+    color: #1e8449; margin-top: 10px;
+  }
+  .regional-status-erro {
+    background: #fdf2e9; border-left: 4px solid #e67e22;
+    border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 12.5px;
+    color: #a04000; margin-top: 10px;
+  }
+  .regional-status-warn {
+    background: #fff8e1; border-left: 4px solid #ffc107;
+    border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 12px;
+    color: #6d4c00; margin-top: 10px;
+  }
+  .regional-resumo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .regional-resumo-card {
+    background: white; border: 2px solid #d6eaf8; border-radius: 10px;
+    padding: 12px; text-align: center;
+  }
+  .regional-resumo-valor {
+    font-family: 'DM Serif Display', serif; font-size: 24px; color: #1a5276;
+  }
+  .regional-resumo-label {
+    font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px;
+  }
+  .regional-map-container {
+    border-radius: 12px; overflow: hidden; border: 1px solid #d6eaf8;
+  }
+  .benchmark-box {
+    background: #f0f7fb; border: 2px solid #aed6f1; border-radius: 10px;
+    padding: 12px 14px; font-size: 12.5px; color: #1a5276; margin-top: 10px;
+  }
+  .benchmark-box .bm-pct {
+    font-family: 'DM Serif Display', serif; font-size: 28px; color: #0d3349;
+  }
+
+  /* ================================================================
+     ANÁLISES ESTATÍSTICAS
+     ================================================================ */
+  .estat-card {
+    background: white; border: 1px solid #e8d5f0; border-radius: 12px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .estat-titulo {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: #6c3483; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+    padding-bottom: 8px; border-bottom: 2px solid #f0e6f6;
+  }
+  .estat-interpretacao {
+    background: #f8f0fc; border-left: 4px solid #6c3483;
+    border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 12.5px;
+    color: #4a235a; margin-top: 10px; line-height: 1.6;
+  }
+  .estat-resultado-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px; margin: 10px 0;
+  }
+  .estat-resultado-card {
+    background: #f8f0fc; border: 2px solid #e8d5f0; border-radius: 10px;
+    padding: 12px; text-align: center;
+  }
+  .estat-resultado-valor {
+    font-family: 'DM Serif Display', serif; font-size: 22px; color: #4a235a;
+  }
+  .estat-resultado-label {
+    font-size: 10px; color: #888; text-transform: uppercase;
+    letter-spacing: 0.4px; margin-top: 2px;
+  }
+  .estat-resultado-card.destaque {
+    background: #4a235a; border-color: #4a235a;
+  }
+  .estat-resultado-card.destaque .estat-resultado-valor { color: white; }
+  .estat-resultado-card.destaque .estat-resultado-label { color: rgba(255,255,255,0.7); }
   "
 }
 
@@ -690,14 +874,15 @@ js_tabs <- function() {
       'tab_adubacao':  'painel_adubacao',
       'tab_financeiro':'painel_financeiro',
       'tab_graficos':  'painel_graficos',
-      'tab_pesquisa':  'painel_pesquisa'
+      'tab_pesquisa':  'painel_pesquisa',
+      'tab_regional':  'painel_regional'
     };
     $('.tab-btn').removeClass('active-tab');
     btn.addClass('active-tab');
     $('.results-panel').removeClass('active-panel');
     $('#' + panelMap[id]).addClass('active-panel');
-    setTimeout(function() { 
-      $(window).trigger('resize'); 
+    setTimeout(function() {
+      $(window).trigger('resize');
     }, 100);
   });
   "

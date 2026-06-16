@@ -14,6 +14,7 @@ utils::globalVariables(c(
 #' Abre o aplicativo Shiny de recomendacao de adubacao e calagem no navegador
 #' padrao do sistema.
 #'
+#' @importFrom rappdirs user_data_dir
 #' @param host Endereco de host. Padrao: \code{"127.0.0.1"} (local).
 #'   Use \code{"0.0.0.0"} para expor na rede local.
 #' @param port Porta TCP. Padrao: porta aleatoria disponivel.

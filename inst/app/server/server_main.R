@@ -203,14 +203,59 @@ server <- function(input, output, session) {
     } else {
       rv_cepea_msg(list(
         cls   = "cepea-erro",
-        texto = paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', resultado$mensagem)
+        texto = paste0(
+          '<i class="bi bi-exclamation-triangle-fill"></i> ',
+          resultado$mensagem,
+          '<br><span style="font-size:11px;margin-top:6px;display:block;opacity:0.85;">',
+          '<b>O que fazer:</b> ',
+          'Os sites CEPEA e AgroLink usam JavaScript din\u00e2mico que bloqueiam consultas autom\u00e1ticas. ',
+          'Acesse <a href="https://www.cepea.esalq.usp.br/br/indicador/insumos-agropecuarios.aspx" ',
+          'target="_blank" style="color:#1a5276;">CEPEA/ESALQ</a> ou ',
+          '<a href="https://www.agrolink.com.br/cotacoes/insumos" target="_blank" style="color:#1a5276;">AgroLink</a> ',
+          'diretamente no navegador, copie os pre\u00e7os e edite a tabela abaixo manualmente.',
+          '</span>'
+        )
       ))
     }
   })
   
   # --------------------------------------------------------------------------
-  # DADOS REATIVOS PRINCIPAIS
+  # BOTÃO MENOR PREÇO BRASIL — exibe painel com links de busca
   # --------------------------------------------------------------------------
+  rv_menor_preco_aberto <- reactiveVal(FALSE)
+
+  observeEvent(input$btn_menor_preco_modal, {
+    rv_menor_preco_aberto(!rv_menor_preco_aberto())
+  })
+
+  output$menor_preco_painel <- renderUI({
+    if (!rv_menor_preco_aberto()) return(NULL)
+
+    div(class = "menor-preco-panel",
+      div(class = "mp-title",
+        HTML('<i class="bi bi-search"></i> Consultar pre\u00e7os de fertilizantes')
+      ),
+      div(class = "mp-links",
+        tags$a(class = "mp-link",
+          href   = "https://play.google.com/store/search?q=menor+pre%C3%A7o+brasil&c=apps",
+          target = "_blank",
+          HTML('<i class="bi bi-phone-fill"></i> Menor Pre\u00e7o Brasil (app)')),
+        tags$a(class = "mp-link",
+          href   = "https://www.cepea.esalq.usp.br/br/indicador/insumos-agropecuarios.aspx",
+          target = "_blank",
+          style  = "color:#1a5276; border-color:#aed6f1;",
+          HTML('<i class="bi bi-bar-chart-fill"></i> CEPEA/ESALQ')),
+        tags$a(class = "mp-link",
+          href   = "https://www.agrolink.com.br/cotacoes/insumos",
+          target = "_blank",
+          style  = "color:#27ae60; border-color:#a9dfbf;",
+          HTML('<i class="bi bi-graph-up"></i> AgroLink'))
+      ),
+      p(style = "font-size:11px; color:#888; margin-top:8px; margin-bottom:0;",
+        HTML('<i class="bi bi-info-circle"></i> Consulte o pre\u00e7o na fonte e insira na tabela abaixo. Clique em <b>Salvar pre\u00e7os</b> para persistir.')
+      )
+    )
+  })
   dados_solo <- reactiveVal(NULL)
   dados_rec  <- reactiveVal(NULL)
 
@@ -1345,6 +1390,1284 @@ server <- function(input, output, session) {
         )
       )
     })
+  })
+
+  # --------------------------------------------------------------------------
+  # ABA BANCO REGIONAL
+  # --------------------------------------------------------------------------
+  rv_regional_df <- reactiveVal(NULL)
+
+  observeEvent(input$regional_file, {
+    f <- input$regional_file
+    if (is.null(f)) return()
+
+    df <- tryCatch(
+      carregar_banco_regional(f$datapath),
+      error = function(e) {
+        rv_regional_df(NULL)
+        showNotification(
+          HTML(paste0('<i class="bi bi-x-circle-fill"></i> Erro ao ler arquivo: ',
+                       conditionMessage(e))),
+          type = "error", duration = 8
+        )
+        NULL
+      }
+    )
+
+    if (!is.null(df)) {
+      rv_regional_df(df)
+      showNotification(
+        HTML(paste0('<i class="bi bi-check-circle-fill"></i> ',
+                     nrow(df), " amostras carregadas com sucesso.")),
+        type = "message", duration = 4
+      )
+    }
+  })
+
+  output$regional_status <- renderUI({
+    df <- rv_regional_df()
+    if (is.null(df)) return(NULL)
+
+    resumo <- resumo_banco_regional(df)
+    div(class = "regional-status-ok",
+      HTML(paste0(
+        '<i class="bi bi-check-circle-fill"></i> <b>', resumo$n_amostras,
+        ' amostras</b> em <b>', resumo$n_municipios, ' munic\u00edpios</b>, anos: ',
+        paste(resumo$anos, collapse = ", ")
+      ))
+    )
+  })
+
+  output$regional_conteudo <- renderUI({
+    df <- rv_regional_df()
+    if (is.null(df)) {
+      return(placeholder_ui("map", "Banco Regional",
+        "Envie o arquivo preenchido (template_banco_regional.xlsx) para ver estat\u00edsticas, mapas e benchmarking."))
+    }
+
+    resumo <- resumo_banco_regional(df)
+
+    tagList(
+      # Resumo geral
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-clipboard-data"></i> Resumo do Banco')),
+        div(class = "regional-resumo-grid",
+          div(class = "regional-resumo-card",
+            div(class = "regional-resumo-valor", resumo$n_amostras),
+            div(class = "regional-resumo-label", "Amostras")),
+          div(class = "regional-resumo-card",
+            div(class = "regional-resumo-valor", resumo$n_municipios),
+            div(class = "regional-resumo-label", "Munic\u00edpios")),
+          div(class = "regional-resumo-card",
+            div(class = "regional-resumo-valor", length(resumo$anos)),
+            div(class = "regional-resumo-label", "Anos")),
+          div(class = "regional-resumo-card",
+            div(class = "regional-resumo-valor",
+                paste(range(resumo$anos), collapse = "\u2013")),
+            div(class = "regional-resumo-label", "Per\u00edodo"))
+        )
+      ),
+
+      # Seletor de atributo / ano / município para estatísticas e mapa
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-sliders"></i> Estat\u00edsticas e Mapa por Atributo')),
+        div(class = "form-row-3",
+          div(class = "form-group-custom",
+            label_custom("Atributo", "bi-thermometer-half"),
+            selectInput("regional_atributo", NULL, width = "100%",
+              choices = setNames(names(nomes_atributos_regional), nomes_atributos_regional))
+          ),
+          div(class = "form-group-custom",
+            label_custom("Ano", "bi-calendar3"),
+            selectInput("regional_ano", NULL, width = "100%",
+              choices = c("Todos", as.character(resumo$anos)))
+          ),
+          div(class = "form-group-custom",
+            label_custom("Estat\u00edstica do mapa", "bi-map"),
+            selectInput("regional_estatistica", NULL, width = "100%",
+              choices = c("M\u00e9dia" = "media", "Mediana" = "mediana",
+                          "Desvio padr\u00e3o" = "dp",
+                          "Percentil 10" = "p10", "Percentil 90" = "p90"))
+          )
+        )
+      ),
+
+      # Tabela de estatísticas
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-table"></i> Estat\u00edsticas por Munic\u00edpio')),
+        DTOutput("regional_tabela_stats")
+      ),
+
+      # Mapa coroplético
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-map-fill"></i> Mapa de Fertilidade por Munic\u00edpio')),
+        uiOutput("regional_mapa_aviso"),
+        div(class = "regional-map-container",
+          leafletOutput("regional_mapa", height = "480px")
+        ),
+        p(style = "font-size:11px; color:#888; margin-top:8px;",
+          HTML('<i class="bi bi-info-circle"></i> Mapa coropl\u00e9tico baseado nos limites ',
+               'municipais do IBGE (via pacote <code>geobr</code>). Os nomes dos munic\u00edpios ',
+               'na planilha devem corresponder \u00e0 grafia oficial do IBGE.'))
+      ),
+
+      # Série temporal
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-graph-up"></i> Tend\u00eancia Temporal')),
+        div(class = "form-group-custom", style = "max-width:280px; margin-bottom:10px;",
+          label_custom("Munic\u00edpio (ou Todos)", "bi-geo-alt"),
+          selectInput("regional_municipio_serie", NULL, width = "100%",
+            choices = c("Todos", resumo$municipios))
+        ),
+        withSpinner(plotlyOutput("regional_serie_temporal", height = "320px"),
+                     type = 8, color = "#1a5276")
+      ),
+
+      # Benchmarking
+      div(class = "result-card",
+        style = "background:#f0f7fb;",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-bullseye"></i> Comparar Amostra Atual com a Regi\u00e3o')),
+        p(style = "font-size:12px; color:#666; margin-bottom:10px;",
+          HTML('<i class="bi bi-info-circle"></i> Compara os valores digitados na aba <b>Solo</b> ',
+               'com a distribui\u00e7\u00e3o regional do munic\u00edpio selecionado.')),
+        div(class = "form-group-custom", style = "max-width:280px; margin-bottom:10px;",
+          label_custom("Munic\u00edpio de refer\u00eancia", "bi-geo-alt-fill"),
+          selectInput("regional_municipio_bench", NULL, width = "100%",
+            choices = resumo$municipios)
+        ),
+        uiOutput("regional_benchmark")
+      )
+    )
+  })
+
+  # ---- Tabela de estatísticas ----
+  output$regional_tabela_stats <- renderDT({
+    df <- rv_regional_df()
+    if (is.null(df) || is.null(input$regional_atributo)) return(NULL)
+
+    stats <- estatisticas_regionais(df, input$regional_atributo, input$regional_ano)
+    names(stats) <- c("Munic\u00edpio", "n", "M\u00e9dia", "Mediana", "Desvio Padr\u00e3o", "P10", "P90")
+
+    datatable(stats, rownames = FALSE, selection = "none",
+      class = "stripe hover compact",
+      options = list(pageLength = 10, dom = "ftip",
+        language = list(
+          search = "Filtrar:",
+          lengthMenu = "Mostrar _MENU_ linhas",
+          info = "Mostrando _START_ a _END_ de _TOTAL_ munic\u00edpios",
+          paginate = list(previous = "Anterior", "next" = "Pr\u00f3ximo")
+        )))
+  }, server = FALSE)
+
+  # ---- Mapa coroplético ----
+  rv_regional_nao_encontrados <- reactiveVal(character(0))
+
+  output$regional_mapa <- renderLeaflet({
+    df <- rv_regional_df()
+    if (is.null(df) || is.null(input$regional_atributo)) {
+      return(leaflet() %>% addProviderTiles(providers$CartoDB.Positron) %>%
+               setView(lng = -37.4, lat = -10.3, zoom = 7))
+    }
+
+    stats <- estatisticas_regionais(df, input$regional_atributo, input$regional_ano)
+    if (nrow(stats) == 0) {
+      return(leaflet() %>% addProviderTiles(providers$CartoDB.Positron) %>%
+               setView(lng = -37.4, lat = -10.3, zoom = 7))
+    }
+
+    estat_col <- input$regional_estatistica %||% "media"
+    titulo    <- nomes_atributos_regional[[input$regional_atributo]]
+
+    resultado <- tryCatch(
+      mapa_coropletico_regional(stats, uf = "SE", coluna_valor = estat_col, titulo = titulo),
+      error = function(e) {
+        showNotification(
+          HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ',
+                       conditionMessage(e))),
+          type = "error", duration = 8
+        )
+        NULL
+      }
+    )
+
+    if (is.null(resultado)) {
+      return(leaflet() %>% addProviderTiles(providers$CartoDB.Positron) %>%
+               setView(lng = -37.4, lat = -10.3, zoom = 7))
+    }
+
+    rv_regional_nao_encontrados(resultado$nao_encontrados)
+    resultado$mapa
+  })
+
+  output$regional_mapa_aviso <- renderUI({
+    naoenc <- rv_regional_nao_encontrados()
+    if (length(naoenc) == 0) return(NULL)
+    div(class = "regional-status-warn",
+      HTML(paste0(
+        '<i class="bi bi-exclamation-triangle-fill"></i> ',
+        '<b>', length(naoenc), ' munic\u00edpio(s) n\u00e3o encontrados</b> nos limites do IBGE: ',
+        paste(naoenc, collapse = ", "),
+        '. Verifique a grafia na planilha (deve ser igual \u00e0 grafia oficial do IBGE).'
+      ))
+    )
+  })
+
+  # ---- Série temporal ----
+  output$regional_serie_temporal <- renderPlotly({
+    df <- rv_regional_df()
+    if (is.null(df) || is.null(input$regional_atributo)) return(plotly_vazio("Aguardando dados..."))
+
+    serie <- serie_temporal_regional(df, input$regional_atributo,
+                                      input$regional_municipio_serie %||% "Todos")
+    if (nrow(serie) == 0) return(plotly_vazio("Sem dados para esta sele\u00e7\u00e3o"))
+
+    titulo <- nomes_atributos_regional[[input$regional_atributo]]
+
+    plot_ly(serie, x = ~ano, y = ~media, type = "scatter", mode = "lines+markers",
+      line = list(color = "#1a5276", width = 3),
+      marker = list(color = "#1a5276", size = 10),
+      text = ~paste0("Ano: ", ano, "<br>M\u00e9dia: ", media, "<br>n = ", n),
+      hovertemplate = "%{text}<extra></extra>"
+    ) %>%
+      layout(
+        xaxis = list(title = "Ano", dtick = 1, tickfont = list(size = 11)),
+        yaxis = list(title = titulo, gridcolor = "#eee"),
+        paper_bgcolor = "transparent",
+        plot_bgcolor  = "transparent",
+        margin = list(t = 20, b = 10)
+      )
+  })
+
+  # ---- Benchmarking ----
+  output$regional_benchmark <- renderUI({
+    df <- rv_regional_df()
+    if (is.null(df) || is.null(input$regional_municipio_bench)) return(NULL)
+
+    solo_atual <- dados_solo()
+    if (is.null(solo_atual)) {
+      return(div(class = "regional-status-warn",
+        HTML('<i class="bi bi-info-circle"></i> Calcule uma an\u00e1lise na aba <b>Solo</b> primeiro para habilitar a compara\u00e7\u00e3o.')
+      ))
+    }
+
+    municipio <- input$regional_municipio_bench
+
+    # Atributos comparáveis (presentes em solo_atual)
+    atributos_bench <- list(
+      ph = solo_atual$ph$valor, mo = solo_atual$mo$valor,
+      p  = solo_atual$p$valor,  k  = solo_atual$k$valor,
+      ca = solo_atual$ca$valor, mg = solo_atual$mg$valor,
+      v_pct = solo_atual$v$valor, m_pct = solo_atual$m$valor
+    )
+
+    linhas <- lapply(names(atributos_bench), function(at) {
+      valor <- atributos_bench[[at]]
+      if (is.null(valor) || is.na(valor)) return(NULL)
+
+      bm <- benchmark_valor(df, at, municipio, valor)
+      if (!bm$disponivel) return(NULL)
+
+      cor_pct <- if (bm$percentil < 25) "#d32f2f"
+                 else if (bm$percentil < 50) "#f57c00"
+                 else if (bm$percentil < 75) "#7cb342"
+                 else "#2e7d32"
+
+      div(class = "pesq-dose-row",
+        span(class = "pesq-dose-label",
+          HTML(paste0(nomes_atributos_regional[[at]], " = <b>", valor, "</b>"))),
+        span(
+          span(class = "pesq-dose-valor", style = paste0("color:", cor_pct, ";"),
+               paste0("P", bm$percentil)),
+          span(class = "pesq-dose-unit",
+               paste0(" (m\u00e9dia regional: ", bm$media_regional, ", n=", bm$n, ")"))
+        )
+      )
+    })
+
+    linhas <- Filter(Negate(is.null), linhas)
+
+    if (length(linhas) == 0) {
+      return(div(class = "regional-status-warn",
+        HTML(paste0('<i class="bi bi-info-circle"></i> Dados insuficientes em <b>',
+                     municipio, '</b> para compara\u00e7\u00e3o (m\u00ednimo 3 amostras por atributo).'))
+      ))
+    }
+
+    div(class = "benchmark-box",
+      p(style="margin-bottom:8px;",
+        HTML(paste0('Compara\u00e7\u00e3o com <b>', municipio, '</b> — percentil (P) indica ',
+                     'a posi\u00e7\u00e3o do valor atual na distribui\u00e7\u00e3o hist\u00f3rica regional:'))),
+      linhas
+    )
+  })
+
+  # --------------------------------------------------------------------------
+  # SUB-ABA PESQUISA > ANÁLISES ESTATÍSTICAS
+  # --------------------------------------------------------------------------
+
+  # Fonte de dados: reaproveita rv_regional_df() se carregado; senão upload próprio
+  rv_pesq_df_proprio <- reactiveVal(NULL)
+
+  observeEvent(input$pesq_estat_file, {
+    f <- input$pesq_estat_file
+    if (is.null(f)) return()
+    df <- tryCatch(carregar_banco_regional(f$datapath),
+      error = function(e) {
+        showNotification(
+          HTML(paste0('<i class="bi bi-x-circle-fill"></i> Erro ao ler arquivo: ',
+                       conditionMessage(e))), type = "error", duration = 8)
+        NULL
+      })
+    if (!is.null(df)) {
+      rv_pesq_df_proprio(df)
+      showNotification(
+        HTML(paste0('<i class="bi bi-check-circle-fill"></i> ', nrow(df), " amostras carregadas.")),
+        type = "message", duration = 4)
+    }
+  })
+
+  # Dataframe ativo para análises estatísticas
+  pesq_df_ativo <- reactive({
+    if (!is.null(rv_regional_df())) return(rv_regional_df())
+    rv_pesq_df_proprio()
+  })
+
+  pesq_df_fonte <- reactive({
+    if (!is.null(rv_regional_df())) "regional" else "proprio"
+  })
+
+  # --- Conteúdo principal da sub-aba (UI dinâmica) ---
+  output$pesq_estat_conteudo <- renderUI({
+    df <- pesq_df_ativo()
+
+    if (is.null(df)) {
+      return(tagList(
+        div(class = "result-card",
+          div(class = "result-card-title",
+            HTML('<i class="bi bi-database"></i> Fonte de Dados')),
+          p(style = "font-size:12.5px; color:#666; margin-bottom:10px;",
+            HTML('<i class="bi bi-info-circle"></i> Nenhum banco carregado. Use os dados j\u00e1 ',
+                 'enviados na aba <b>Banco Regional</b>, ou envie seu pr\u00f3prio arquivo no ',
+                 'formato do <code>template_banco_regional.xlsx</code>.')),
+          a(href = "template_banco_regional.xlsx", download = NA, target = "_blank",
+            class = "btn-cepea", style = "display:inline-flex; margin-bottom:10px; margin-right:8px;",
+            HTML('<i class="bi bi-download"></i> Baixar template')),
+          a(href = "banco_regional_EXEMPLO.xlsx", download = NA, target = "_blank",
+            class = "btn-cepea", style = "display:inline-flex; margin-bottom:10px; background:#6c3483; border-color:#6c3483;",
+            HTML('<i class="bi bi-stars"></i> Baixar planilha de EXEMPLO (140 amostras)')),
+          fileInput("pesq_estat_file", NULL, accept = c(".xlsx"), width = "100%",
+            buttonLabel = HTML('<i class="bi bi-folder2-open"></i> Escolher arquivo'),
+            placeholder = "Nenhum arquivo selecionado")
+        )
+      ))
+    }
+
+    resumo <- resumo_banco_regional(df)
+    atrib_choices <- atributos_numericos_disponiveis(df)
+    grupo_choices  <- grupos_categoricos_disponiveis(df)
+    tem_produtividade <- "produtividade" %in% names(df) && sum(!is.na(df$produtividade)) >= 8
+    culturas_disp <- if ("cultura" %in% names(df)) {
+      c("Todas", sort(unique(stats::na.omit(df$cultura))))
+    } else "Todas"
+
+    tagList(
+      # Status da fonte
+      div(class = "regional-status-ok",
+        HTML(paste0(
+          '<i class="bi bi-check-circle-fill"></i> Usando <b>', resumo$n_amostras,
+          ' amostras</b> (', if (pesq_df_fonte() == "regional") "Banco Regional carregado" else "arquivo pr\u00f3prio",
+          '). ',
+          if (!tem_produtividade)
+            '<span style="color:#a04000;"><i class="bi bi-exclamation-triangle"></i> Sem dados de produtividade suficientes \u2014 limiares cr\u00edticos (Cate-Nelson / Linear-Plat\u00f4) ficar\u00e3o indispon\u00edveis.</span>'
+          else
+            '<span style="color:#1e8449;"><i class="bi bi-check2"></i> Produtividade dispon\u00edvel \u2014 limiares cr\u00edticos habilitados.</span>'
+        ))
+      ),
+
+      # Seletor de tipo de análise
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-list-check"></i> Tipo de An\u00e1lise')),
+        selectInput("pesq_tipo_analise", NULL, width = "100%",
+          choices = c(
+            "Matriz de Correla\u00e7\u00e3o"              = "correlacao",
+            "Dispers\u00e3o & Regress\u00e3o"             = "regressao",
+            "Regress\u00e3o M\u00faltipla"                = "regressao_multipla",
+            "An\u00e1lise de Trilha (Path Analysis)"      = "analise_trilha",
+            "ANOVA \u2014 Compara\u00e7\u00e3o de M\u00e9dias" = "anova",
+            "PCA \u2014 Componentes Principais"          = "pca",
+            "Cluster \u2014 Tipologia de Solos"          = "cluster",
+            "Limiar Cr\u00edtico \u2014 Cate-Nelson"      = "cate_nelson",
+            "Limiar Cr\u00edtico \u2014 Linear-Plat\u00f4" = "linear_plato"
+          )
+        ),
+        uiOutput("pesq_estat_inputs_dinamicos")
+      ),
+
+      # Resultado
+      uiOutput("pesq_estat_resultado")
+    )
+  })
+
+  # --- Inputs dinâmicos por tipo de análise ---
+  output$pesq_estat_inputs_dinamicos <- renderUI({
+    df <- pesq_df_ativo()
+    if (is.null(df) || is.null(input$pesq_tipo_analise)) return(NULL)
+
+    atrib_choices <- atributos_numericos_disponiveis(df)
+    grupo_choices <- grupos_categoricos_disponiveis(df)
+    culturas_disp <- if ("cultura" %in% names(df)) {
+      c("Todas", sort(unique(stats::na.omit(df$cultura))))
+    } else "Todas"
+
+    # Conjunto padrão de atributos para correlação/PCA/cluster
+    default_multi <- intersect(
+      c("ph","mo","p","k","ca","mg","al","h_al","argila","ctc","v_pct","m_pct"),
+      atrib_choices
+    )
+
+    switch(input$pesq_tipo_analise,
+
+      "correlacao" = tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Atributos (m\u00ednimo 2)", "bi-grid-3x3"),
+            selectizeInput("pesq_corr_vars", NULL, choices = atrib_choices,
+              selected = default_multi, multiple = TRUE, width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("M\u00e9todo", "bi-calculator"),
+            selectInput("pesq_corr_metodo", NULL, width = "100%",
+              choices = c("Pearson" = "pearson", "Spearman (n\u00e3o-param.)" = "spearman"))
+          )
+        ),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica", HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "regressao" = tagList(
+        div(class = "form-row-3",
+          div(class = "form-group-custom",
+            label_custom("Vari\u00e1vel X", "bi-arrow-left-right"),
+            selectInput("pesq_reg_x", NULL, choices = atrib_choices, width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Vari\u00e1vel Y", "bi-arrow-up"),
+            selectInput("pesq_reg_y", NULL, choices = atrib_choices,
+              selected = if ("produtividade" %in% atrib_choices) "produtividade" else unname(atrib_choices[2]),
+              width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Grau do polin\u00f4mio", "bi-graph-up"),
+            selectInput("pesq_reg_grau", NULL, width = "100%",
+              choices = c("Linear" = 1, "Quadr\u00e1tico" = 2, "C\u00fabico" = 3))
+          )
+        ),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica", HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "regressao_multipla" = tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Vari\u00e1veis explicativas \u2014 X (m\u00ednimo 2)", "bi-grid-3x3"),
+            selectizeInput("pesq_rm_x", NULL, choices = atrib_choices,
+              selected = head(default_multi, 4), multiple = TRUE, width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Vari\u00e1vel dependente \u2014 Y", "bi-arrow-up"),
+            selectInput("pesq_rm_y", NULL, choices = atrib_choices,
+              selected = if ("produtividade" %in% atrib_choices) "produtividade" else unname(atrib_choices[length(atrib_choices)]),
+              width = "100%")
+          )
+        ),
+        p(style = "font-size:11.5px; color:#888; margin-top:-4px;",
+          HTML('<i class="bi bi-info-circle"></i> A vari\u00e1vel Y \u00e9 automaticamente removida ',
+               'das op\u00e7\u00f5es de X. Coeficientes padronizados (\u03b2) e VIF (multicolinearidade) ',
+               's\u00e3o calculados automaticamente.')),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica", HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "analise_trilha" = tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Vari\u00e1veis explicativas \u2014 X (m\u00ednimo 2)", "bi-grid-3x3"),
+            selectizeInput("pesq_trilha_x", NULL, choices = atrib_choices,
+              selected = head(default_multi, 4), multiple = TRUE, width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Vari\u00e1vel principal \u2014 Y", "bi-bullseye"),
+            selectInput("pesq_trilha_y", NULL, choices = atrib_choices,
+              selected = if ("produtividade" %in% atrib_choices) "produtividade" else unname(atrib_choices[length(atrib_choices)]),
+              width = "100%")
+          )
+        ),
+        p(style = "font-size:11.5px; color:#888; margin-top:-4px;",
+          HTML('<i class="bi bi-info-circle"></i> Decomp\u00f5e a correla\u00e7\u00e3o de cada vari\u00e1vel X ',
+               'com Y em efeito DIRETO (controlando as demais) e INDIRETO (mediado pelas demais). ',
+               'Inclui diagn\u00f3stico de multicolinearidade (Cruz &amp; Carneiro, 2003).')),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica", HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "anova" = tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Atributo (vari\u00e1vel num\u00e9rica)", "bi-thermometer-half"),
+            selectInput("pesq_anova_y", NULL, choices = atrib_choices, width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Agrupar por", "bi-collection"),
+            selectInput("pesq_anova_grupo", NULL, choices = grupo_choices, width = "100%")
+          )
+        ),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica", HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "pca" = tagList(
+        div(class = "form-group-custom",
+          label_custom("Atributos (m\u00ednimo 3)", "bi-grid-3x3"),
+          selectizeInput("pesq_pca_vars", NULL, choices = atrib_choices,
+            selected = default_multi, multiple = TRUE, width = "100%")
+        ),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica", HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "cluster" = tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Atributos (m\u00ednimo 2)", "bi-grid-3x3"),
+            selectizeInput("pesq_cluster_vars", NULL, choices = atrib_choices,
+              selected = default_multi, multiple = TRUE, width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("N\u00famero de grupos (k)", "bi-diagram-3"),
+            numericInput("pesq_cluster_k", NULL, value = 3, min = 2, max = 6, step = 1, width = "100%")
+          )
+        ),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica", HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "cate_nelson" = if (!("produtividade" %in% names(df) && sum(!is.na(df$produtividade)) >= 8)) {
+        div(class = "stat-erro",
+          HTML('<i class="bi bi-exclamation-triangle-fill"></i> Requer a coluna <b>produtividade</b> ',
+               'preenchida em pelo menos 8 amostras. Atualize o banco regional com o template ',
+               'que inclui produtividade.'))
+      } else tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Atributo do solo (X)", "bi-thermometer-half"),
+            selectInput("pesq_cn_x", NULL,
+              choices = atrib_choices[atrib_choices != "produtividade"], width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Cultura", "bi-flower2"),
+            selectInput("pesq_cn_cultura", NULL, choices = culturas_disp, width = "100%")
+          )
+        ),
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Produtividade relativa cr\u00edtica (%)", "bi-percent"),
+            numericInput("pesq_cn_ycrit", NULL, value = 90, min = 50, max = 99, step = 1, width = "100%")
+          ),
+          div(class = "form-group-custom", style = "padding-top: 22px;",
+            checkboxInput("pesq_cn_testemunha",
+              "Usar apenas parcelas Testemunha (sem aduba\u00e7\u00e3o)", value = FALSE)
+          )
+        ),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica", HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "linear_plato" = if (!("produtividade" %in% names(df) && sum(!is.na(df$produtividade)) >= 8)) {
+        div(class = "stat-erro",
+          HTML('<i class="bi bi-exclamation-triangle-fill"></i> Requer a coluna <b>produtividade</b> ',
+               'preenchida em pelo menos 8 amostras. Atualize o banco regional com o template ',
+               'que inclui produtividade.'))
+      } else tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Atributo do solo (X)", "bi-thermometer-half"),
+            selectInput("pesq_lp_x", NULL,
+              choices = atrib_choices[atrib_choices != "produtividade"], width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Cultura", "bi-flower2"),
+            selectInput("pesq_lp_cultura", NULL, choices = culturas_disp, width = "100%")
+          )
+        ),
+        div(class = "form-group-custom",
+          checkboxInput("pesq_lp_testemunha",
+            "Usar apenas parcelas Testemunha (sem aduba\u00e7\u00e3o)", value = FALSE)
+        ),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica", HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      )
+    )
+  })
+
+  # --- Resultado da análise (reativo a Calcular, não é output) ---
+  pesq_clicado <- reactiveVal(FALSE)
+  observeEvent(input$btn_rodar_estatistica, { pesq_clicado(TRUE) })
+  # Ao trocar o tipo de análise, esconde resultado anterior (evita plot
+  # de um tipo aparecer no container de outro até novo clique em Calcular)
+  observeEvent(input$pesq_tipo_analise, { pesq_clicado(FALSE) }, ignoreInit = TRUE)
+
+  pesq_resultado_calc <- eventReactive(input$btn_rodar_estatistica, {
+    df <- pesq_df_ativo()
+    tipo <- input$pesq_tipo_analise
+    if (is.null(df) || is.null(tipo)) return(list(ui = NULL, plot = NULL))
+
+    switch(tipo,
+
+      "correlacao" = {
+        vars <- input$pesq_corr_vars
+        if (length(vars) < 2) {
+          return(list(ui = div(class = "stat-erro",
+            HTML('<i class="bi bi-exclamation-triangle-fill"></i> Selecione ao menos 2 atributos.')),
+            plot = NULL))
+        }
+        res <- calc_correlacao(df, vars, input$pesq_corr_metodo %||% "pearson")
+        if (!is.null(res$erro)) return(list(
+          ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        labels <- nomes_atributos_regional[res$vars]
+
+        heatmap <- plot_ly(
+          x = labels, y = labels, z = res$cor, type = "heatmap",
+          colorscale = list(c(0, "#c0392b"), c(0.5, "#ffffff"), c(1, "#1e8449")),
+          zmin = -1, zmax = 1,
+          text = round(res$cor, 2), texttemplate = "%{text}",
+          hovertemplate = "%{x} \u00d7 %{y}<br>r = %{z:.3f}<extra></extra>"
+        ) %>% layout(
+          margin = list(l = 120, b = 120),
+          xaxis = list(tickangle = -45, tickfont = list(size = 10)),
+          yaxis = list(tickfont = list(size = 10)),
+          paper_bgcolor = "transparent"
+        )
+
+        tabela_pares <- NULL
+        if (nrow(res$pares) > 0) {
+          pares_show <- res$pares
+          pares_show$var1 <- nomes_atributos_regional[pares_show$var1]
+          pares_show$var2 <- nomes_atributos_regional[pares_show$var2]
+          names(pares_show) <- c("Atributo 1","Atributo 2","r","p")
+          tabela_pares <- datatable(pares_show, rownames = FALSE, selection = "none",
+            class = "stripe hover compact",
+            options = list(pageLength = 8, dom = "tip",
+              language = list(paginate = list(previous="Anterior", "next"="Pr\u00f3ximo"))))
+        }
+
+        interp <- if (nrow(res$pares) > 0) {
+          melhor <- res$pares[1, ]
+          paste0(
+            'Par mais correlacionado: <b>', nomes_atributos_regional[melhor$var1], '</b> \u00d7 ',
+            '<b>', nomes_atributos_regional[melhor$var2], '</b>. ',
+            interpretar_correlacao_par(melhor$r, melhor$p)
+          )
+        } else "Nenhum par com |r| \u2265 0.4 encontrado."
+
+        tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-grid-3x3-gap"></i> Matriz de Correla\u00e7\u00e3o',
+                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_correlacao", height = "480px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interp))
+          ),
+          if (!is.null(tabela_pares))
+            div(class = "result-card",
+              div(class = "result-card-title",
+                HTML('<i class="bi bi-table"></i> Pares com Correla\u00e7\u00e3o Relevante (|r| \u2265 0.4)')),
+              tabela_pares
+            )
+        ) -> ui_out
+
+        list(ui = ui_out, plot = heatmap)
+      },
+
+      "regressao" = {
+        x <- input$pesq_reg_x; y <- input$pesq_reg_y
+        grau <- as.integer(input$pesq_reg_grau %||% 1)
+        res <- calc_regressao(df, x, y, grau)
+        if (!is.null(res$erro)) return(list(
+          ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        nome_x <- nomes_atributos_regional[[x]]
+        nome_y <- nomes_atributos_regional[[y]]
+
+        scatter <- plot_ly(res$dados, x = ~x, y = ~y, type = "scatter", mode = "markers",
+          marker = list(color = "#2c2c7a", size = 9, opacity = 0.65),
+          name = "Amostras", hovertemplate = paste0(nome_x, ": %{x}<br>", nome_y, ": %{y}<extra></extra>")
+        ) %>%
+          add_trace(x = res$x_seq, y = res$pred, type = "scatter", mode = "lines",
+            line = list(color = "#e67e22", width = 3), name = "Ajuste") %>%
+          layout(
+            xaxis = list(title = nome_x, gridcolor = "#eee"),
+            yaxis = list(title = nome_y, gridcolor = "#eee"),
+            paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+            showlegend = TRUE, margin = list(t = 10)
+          )
+
+        eq <- if (grau == 1) {
+          paste0("y = ", round(res$coef[1],3), " + ", round(res$coef[2],4), " \u00d7 x")
+        } else {
+          paste0("Polinomial de grau ", grau, " (R\u00b2 = ", round(res$r2,3), ")")
+        }
+
+        interp <- paste0(
+          'Equa\u00e7\u00e3o: <b>', eq, '</b>. R\u00b2 = ', round(res$r2, 3),
+          if (!is.na(res$p)) paste0(' (p ', if (res$p < 0.001) '&lt; 0.001' else paste0('= ', round(res$p,4)), ')') else '',
+          '. ', interpretar_r2(res$r2)
+        )
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-graph-up"></i> ', nome_x, ' \u00d7 ', nome_y,
+                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_regressao", height = "420px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interp))
+          )
+        )
+        list(ui = ui_out, plot = scatter)
+      },
+
+      "regressao_multipla" = {
+        x_vars <- input$pesq_rm_x
+        y_var  <- input$pesq_rm_y
+        x_vars <- setdiff(x_vars, y_var)  # Y nunca pode ser também X
+
+        res <- calc_regressao_multipla(df, x_vars, y_var)
+        if (!is.null(res$erro)) return(list(
+          ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        nome_y <- nomes_atributos_regional[[y_var]]
+
+        # --- Painel 1: Observado x Predito (com linha 1:1) ---
+        faixa <- range(c(res$observado, res$predito))
+        p1 <- plot_ly(x = res$observado, y = res$predito, type = "scatter", mode = "markers",
+            marker = list(color = "#2c2c7a", size = 9, opacity = 0.65),
+            name = "Amostras",
+            hovertemplate = "Observado: %{x}<br>Predito: %{y}<extra></extra>") %>%
+          add_trace(x = faixa, y = faixa, type = "scatter", mode = "lines",
+            line = list(color = "#aaa", dash = "dot", width = 1.5),
+            name = "1:1", showlegend = FALSE,
+            hoverinfo = "skip") %>%
+          layout(
+            xaxis = list(title = paste0(nome_y, " observado"), gridcolor = "#eee"),
+            yaxis = list(title = paste0(nome_y, " predito"), gridcolor = "#eee"),
+            showlegend = FALSE
+          )
+
+        # --- Painel 2: coeficientes padronizados (betas) ---
+        betas_df <- data.frame(
+          variavel = res$x_vars,
+          nome = sapply(res$x_vars, function(v) nomes_atributos_regional[[v]]),
+          beta = unname(res$betas[res$x_vars]),
+          stringsAsFactors = FALSE
+        )
+        betas_df <- betas_df[order(abs(betas_df$beta)), ]
+        p2 <- plot_ly(betas_df, x = ~beta, y = ~factor(nome, levels = nome),
+            type = "bar", orientation = "h",
+            marker = list(color = ifelse(betas_df$beta >= 0, "#27ae60", "#c0392b")),
+            hovertemplate = "%{y}: %{x:.3f}<extra></extra>"
+          ) %>%
+          layout(
+            xaxis = list(title = "Coeficiente padronizado (\u03b2)", zeroline = TRUE, zerolinecolor = "#999"),
+            yaxis = list(title = "")
+          )
+
+        combo <- subplot(p1, p2, nrows = 1, margin = 0.09, titleX = TRUE, titleY = TRUE) %>%
+          layout(paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+                 margin = list(t = 10), showlegend = FALSE)
+
+        # --- Tabela de coeficientes (não-padronizados + beta + VIF) ---
+        coefs_x <- res$coefs[res$coefs$variavel != "(Intercepto)", ]
+        coefs_show <- data.frame(
+          variavel = sapply(coefs_x$variavel, function(v) nomes_atributos_regional[[v]]),
+          estimativa = coefs_x$estimativa,
+          erro_padrao = coefs_x$erro_padrao,
+          beta_padronizado = round(unname(res$betas[coefs_x$variavel]), 3),
+          p_valor = coefs_x$p_valor,
+          vif = ifelse(is.infinite(res$vif[coefs_x$variavel]), "\u221e",
+                        as.character(unname(res$vif[coefs_x$variavel]))),
+          stringsAsFactors = FALSE
+        )
+        names(coefs_show) <- c("Vari\u00e1vel", "Estimativa", "Erro Padr\u00e3o",
+                                "\u03b2 (padron.)", "p-valor", "VIF")
+
+        interp <- interpretar_regressao_multipla(res, nomes_atributos_regional, nome_y)
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-graph-up-arrow"></i> Regress\u00e3o M\u00faltipla \u2014 ', nome_y,
+                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_regressao_multipla", height = "420px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interp))
+          ),
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML('<i class="bi bi-table"></i> Coeficientes do Modelo')),
+            datatable(coefs_show, rownames = FALSE, selection = "none",
+              class = "stripe hover compact",
+              options = list(pageLength = 10, dom = "tip",
+                language = list(paginate = list(previous = "Anterior", "next" = "Pr\u00f3ximo"))))
+          )
+        )
+        list(ui = ui_out, plot = combo)
+      },
+
+      "analise_trilha" = {
+        x_vars <- input$pesq_trilha_x
+        y_var  <- input$pesq_trilha_y
+        x_vars <- setdiff(x_vars, y_var)
+
+        res <- calc_analise_trilha(df, x_vars, y_var)
+        if (!is.null(res$erro)) return(list(
+          ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        nome_y <- nomes_atributos_regional[[y_var]]
+        nomes_x_vars <- sapply(res$x_vars, function(v) nomes_atributos_regional[[v]])
+
+        resumo_plot <- res$resumo
+        resumo_plot$nome <- nomes_x_vars[resumo_plot$variavel]
+
+        grafico <- plot_ly(resumo_plot, x = ~factor(nome, levels = nome), y = ~correlacao_total,
+            type = "bar", name = "Correla\u00e7\u00e3o total (r)", marker = list(color = "#7f8c8d"),
+            hovertemplate = "%{x}<br>r = %{y:.3f}<extra></extra>") %>%
+          add_trace(y = ~efeito_direto, name = "Efeito direto", marker = list(color = "#2c2c7a"),
+            hovertemplate = "%{x}<br>direto = %{y:.3f}<extra></extra>") %>%
+          add_trace(y = ~efeito_indireto, name = "Efeito indireto", marker = list(color = "#e67e22"),
+            hovertemplate = "%{x}<br>indireto = %{y:.3f}<extra></extra>") %>%
+          layout(
+            barmode = "group",
+            xaxis = list(title = ""),
+            yaxis = list(title = "Coeficiente", zeroline = TRUE, zerolinecolor = "#999", gridcolor = "#eee"),
+            legend = list(orientation = "h", x = 0, y = -0.18),
+            paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+            margin = list(t = 10)
+          )
+
+        # --- Tabela resumo ---
+        resumo_show <- data.frame(
+          variavel = nomes_x_vars[res$resumo$variavel],
+          correlacao_total = res$resumo$correlacao_total,
+          efeito_direto = res$resumo$efeito_direto,
+          efeito_indireto = res$resumo$efeito_indireto,
+          residuo = res$resumo$residuo,
+          stringsAsFactors = FALSE
+        )
+        names(resumo_show) <- c("Vari\u00e1vel", "Correla\u00e7\u00e3o total (r)", "Efeito direto",
+                                 "Efeito indireto (total)", "Res\u00edduo")
+
+        # --- Matriz de efeitos indiretos detalhados (Xi via Xj) ---
+        ind_mat <- res$indiretos_detalhe
+        rownames(ind_mat) <- nomes_x_vars[rownames(ind_mat)]
+        colnames(ind_mat) <- nomes_x_vars[colnames(ind_mat)]
+        ind_df <- as.data.frame(ind_mat)
+        ind_df <- cbind(variavel = rownames(ind_df), ind_df)
+        rownames(ind_df) <- NULL
+        names(ind_df)[1] <- "Vari\u00e1vel"
+
+        interp <- interpretar_trilha(res, nomes_atributos_regional, nome_y)
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-diagram-3-fill"></i> An\u00e1lise de Trilha \u2014 ', nome_y,
+                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_trilha", height = "400px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interp))
+          ),
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML('<i class="bi bi-table"></i> Decomposi\u00e7\u00e3o da Correla\u00e7\u00e3o')),
+            datatable(resumo_show, rownames = FALSE, selection = "none",
+              class = "stripe hover compact",
+              options = list(pageLength = 10, dom = "tip",
+                language = list(paginate = list(previous = "Anterior", "next" = "Pr\u00f3ximo"))))
+          ),
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML('<i class="bi bi-grid-3x3"></i> Efeitos Indiretos Detalhados (linha via coluna)')),
+            p(style = "font-size:11.5px; color:#888; margin-bottom:8px;",
+              HTML('<i class="bi bi-info-circle"></i> Cada c\u00e9lula = efeito indireto da vari\u00e1vel ',
+                   'da LINHA sobre ', nome_y, ', mediado pela vari\u00e1vel da COLUNA (r entre as duas ',
+                   '\u00d7 efeito direto da coluna).')),
+            div(style = "overflow-x:auto;",
+              datatable(ind_df, rownames = FALSE, selection = "none",
+                class = "stripe hover compact",
+                options = list(pageLength = 10, dom = "tip", scrollX = TRUE,
+                  language = list(paginate = list(previous = "Anterior", "next" = "Pr\u00f3ximo"))))
+            )
+          )
+        )
+        list(ui = ui_out, plot = grafico)
+      },
+
+      "anova" = {
+        atributo <- input$pesq_anova_y
+        grupo    <- input$pesq_anova_grupo
+        res <- calc_anova(df, atributo, grupo)
+        if (!is.null(res$erro)) return(list(
+          ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        nome_y <- nomes_atributos_regional[[atributo]]
+        nomes_grupo_inv <- setNames(names(grupos_categoricos_disponiveis(df)),
+                                     grupos_categoricos_disponiveis(df))
+        nome_grupo <- if (!is.null(nomes_grupo_inv[[grupo]])) nomes_grupo_inv[[grupo]] else grupo
+
+        boxplot <- plot_ly(res$dados, x = ~g, y = ~y, type = "box",
+          marker = list(color = "#2c2c7a"), line = list(color = "#2c2c7a"),
+          fillcolor = "rgba(44,44,122,0.15)"
+        ) %>% layout(
+          xaxis = list(title = nome_grupo, tickangle = -30, tickfont = list(size = 10)),
+          yaxis = list(title = nome_y, gridcolor = "#eee"),
+          paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+          margin = list(t = 10)
+        )
+
+        tab_medias <- res$medias
+        names(tab_medias) <- c("Grupo","n","M\u00e9dia","Desvio Padr\u00e3o")
+
+        sig_txt <- if (nrow(res$tukey_sig) > 0) {
+          paste0(nrow(res$tukey_sig), " par(es) com diferen\u00e7a significativa (Tukey, p &lt; 0.05).")
+        } else "Nenhum par com diferen\u00e7a significativa no teste de Tukey."
+
+        interp <- paste0(
+          "ANOVA: p ", if (res$p_global < 0.001) "&lt; 0.001" else paste0("= ", round(res$p_global, 4)),
+          " (", res$k, " grupos, n = ", res$n, "). ",
+          if (res$p_global < 0.05)
+            paste0("H\u00e1 diferen\u00e7a significativa entre os grupos para ", nome_y, ". ", sig_txt)
+          else
+            paste0("N\u00e3o h\u00e1 diferen\u00e7a significativa entre os grupos para ", nome_y, ".")
+        )
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-bar-chart-line"></i> ', nome_y, ' por ', nome_grupo,
+                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_anova", height = "420px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interp))
+          ),
+          div(class = "result-card",
+            div(class = "result-card-title", HTML('<i class="bi bi-table"></i> M\u00e9dias por Grupo')),
+            datatable(tab_medias, rownames = FALSE, selection = "none",
+              class = "stripe hover compact",
+              options = list(pageLength = 10, dom = "tip",
+                language = list(paginate = list(previous="Anterior", "next"="Pr\u00f3ximo"))))
+          ),
+          if (nrow(res$tukey_sig) > 0)
+            div(class = "result-card",
+              div(class = "result-card-title", HTML('<i class="bi bi-asterisk"></i> Diferen\u00e7as Significativas (Tukey)')),
+              datatable(res$tukey_sig, rownames = FALSE, selection = "none",
+                class = "stripe hover compact",
+                options = list(pageLength = 10, dom = "tip",
+                  language = list(paginate = list(previous="Anterior", "next"="Pr\u00f3ximo"))))
+            )
+        )
+        list(ui = ui_out, plot = boxplot)
+      },
+
+      "pca" = {
+        vars <- input$pesq_pca_vars
+        if (length(vars) < 3) {
+          return(list(ui = div(class = "stat-erro",
+            HTML('<i class="bi bi-exclamation-triangle-fill"></i> Selecione ao menos 3 atributos.')),
+            plot = NULL))
+        }
+        res <- calc_pca(df, vars)
+        if (!is.null(res$erro)) return(list(
+          ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        scatter <- plot_ly(res$scores, x = ~PC1, y = ~PC2, type = "scatter", mode = "markers",
+          marker = list(color = "#2c2c7a", size = 9, opacity = 0.65)
+        ) %>% layout(
+          xaxis = list(title = paste0("PC1 (", res$var_exp[1], "%)"), gridcolor = "#eee"),
+          yaxis = list(title = paste0("PC2 (", res$var_exp[2], "%)"), gridcolor = "#eee"),
+          paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+          margin = list(t = 10)
+        )
+
+        load_show <- res$loadings
+        load_show$var <- nomes_atributos_regional[load_show$var]
+        load_show$PC1 <- round(load_show$PC1, 3)
+        load_show$PC2 <- round(load_show$PC2, 3)
+        names(load_show) <- c("PC1","PC2","Atributo")
+        load_show <- load_show[, c("Atributo","PC1","PC2")]
+        load_show <- load_show[order(-abs(load_show$PC1)), ]
+
+        interp <- paste0(
+          "PC1 explica ", res$var_exp[1], "% e PC2 explica ", res$var_exp[2],
+          "% da variabilidade total (", round(sum(res$var_exp),1), "% combinados). ",
+          "Atributos com maior contribui\u00e7\u00e3o no PC1: <b>",
+          paste(head(load_show$Atributo, 3), collapse = ", "), "</b>."
+        )
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-bullseye"></i> PCA \u2014 Dispers\u00e3o das Amostras',
+                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_pca", height = "420px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interp))
+          ),
+          div(class = "result-card",
+            div(class = "result-card-title", HTML('<i class="bi bi-table"></i> Cargas dos Atributos (Loadings)')),
+            datatable(load_show, rownames = FALSE, selection = "none",
+              class = "stripe hover compact",
+              options = list(pageLength = 10, dom = "tip",
+                language = list(paginate = list(previous="Anterior", "next"="Pr\u00f3ximo"))))
+          )
+        )
+        list(ui = ui_out, plot = scatter)
+      },
+
+      "cluster" = {
+        vars <- input$pesq_cluster_vars
+        k <- as.integer(input$pesq_cluster_k %||% 3)
+        if (length(vars) < 2) {
+          return(list(ui = div(class = "stat-erro",
+            HTML('<i class="bi bi-exclamation-triangle-fill"></i> Selecione ao menos 2 atributos.')),
+            plot = NULL))
+        }
+        res <- calc_cluster(df, vars, k)
+        if (!is.null(res$erro)) return(list(
+          ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        scatter <- plot_ly(res$scores, x = ~PC1, y = ~PC2, color = ~cluster,
+          colors = c("#2c2c7a","#27ae60","#e67e22","#c0392b","#8e44ad","#16a085"),
+          type = "scatter", mode = "markers",
+          marker = list(size = 9, opacity = 0.7)
+        ) %>% layout(
+          xaxis = list(title = paste0("PC1 (", res$var_exp[1], "%)"), gridcolor = "#eee"),
+          yaxis = list(title = paste0("PC2 (", res$var_exp[2], "%)"), gridcolor = "#eee"),
+          paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+          margin = list(t = 10), legend = list(title = list(text = "Grupo"))
+        )
+
+        perfil_show <- res$perfil
+        names(perfil_show)[names(perfil_show) %in% names(nomes_atributos_regional)] <-
+          nomes_atributos_regional[names(perfil_show)[names(perfil_show) %in% names(nomes_atributos_regional)]]
+        perfil_show <- perfil_show[, c("cluster","n", setdiff(names(perfil_show), c("cluster","n")))]
+        names(perfil_show)[1:2] <- c("Grupo","n")
+
+        interp <- paste0(
+          "Amostras separadas em <b>", k, " grupos</b> (n = ", res$n, ") com base em ",
+          length(res$vars), " atributos. Visualiza\u00e7\u00e3o via PCA: PC1+PC2 explicam ",
+          round(sum(res$var_exp),1), "% da varia\u00e7\u00e3o. Use a tabela de perfil m\u00e9dio para ",
+          "caracterizar cada grupo (ex: 'Grupo 1 = solos \u00e1cidos com baixo P')."
+        )
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-diagram-3"></i> Cluster (k-means, k=', k, ')',
+                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_cluster", height = "420px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interp))
+          ),
+          div(class = "result-card",
+            div(class = "result-card-title", HTML('<i class="bi bi-table"></i> Perfil M\u00e9dio por Grupo')),
+            div(style = "overflow-x:auto;",
+              datatable(perfil_show, rownames = FALSE, selection = "none",
+                class = "stripe hover compact",
+                options = list(pageLength = 10, dom = "tip", scrollX = TRUE,
+                  language = list(paginate = list(previous="Anterior", "next"="Pr\u00f3ximo"))))
+            )
+          )
+        )
+        list(ui = ui_out, plot = scatter)
+      },
+
+      "cate_nelson" = {
+        x <- input$pesq_cn_x
+        res <- calc_cate_nelson(df, x, "produtividade",
+          cultura = input$pesq_cn_cultura, y_critico_pct = input$pesq_cn_ycrit %||% 90,
+          apenas_testemunha = isTRUE(input$pesq_cn_testemunha))
+        if (!is.null(res$erro)) return(list(
+          ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        nome_x <- nomes_atributos_regional[[x]]
+        cores_quad <- c(
+          "Resposta esperada (X baixo, Y baixo)" = "#1e8449",
+          "Sem resposta (X alto, Y alto)" = "#2c2c7a",
+          "Discordante" = "#c0392b"
+        )
+
+        scatter <- plot_ly(res$dados, x = res$dados[[x]], y = ~y_rel, type = "scatter", mode = "markers",
+          color = ~quadrante, colors = cores_quad,
+          marker = list(size = 9, opacity = 0.7),
+          hovertemplate = paste0(nome_x, ": %{x}<br>Produtividade relativa: %{y:.1f}%<extra></extra>")
+        ) %>%
+          layout(
+            xaxis = list(title = nome_x, gridcolor = "#eee"),
+            yaxis = list(title = "Produtividade relativa (%)", gridcolor = "#eee", range = c(0,105)),
+            shapes = list(
+              list(type="line", x0=res$xc, x1=res$xc, y0=0, y1=105, yref="y",
+                   line=list(color="#888", dash="dash", width=2)),
+              list(type="line", x0=min(res$dados[[x]]), x1=max(res$dados[[x]]), y0=res$y_critico, y1=res$y_critico,
+                   line=list(color="#888", dash="dash", width=2))
+            ),
+            annotations = list(
+              list(x = res$xc, y = 102, text = paste0("Xc = ", round(res$xc,2)),
+                   showarrow = FALSE, font = list(size = 11, color="#555"))
+            ),
+            paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+            margin = list(t = 30), legend = list(orientation = "h", y = -0.25)
+          )
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-bullseye"></i> Cate-Nelson \u2014 ', nome_x,
+                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_cate_nelson", height = "440px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interpretar_cate_nelson(res, nome_x)))
+          )
+        )
+        list(ui = ui_out, plot = scatter)
+      },
+
+      "linear_plato" = {
+        x <- input$pesq_lp_x
+        res <- calc_linear_plato(df, x, "produtividade",
+          cultura = input$pesq_lp_cultura,
+          apenas_testemunha = isTRUE(input$pesq_lp_testemunha))
+        if (!is.null(res$erro)) return(list(
+          ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        nome_x <- nomes_atributos_regional[[x]]
+
+        scatter <- plot_ly(res$dados, x = res$dados[[x]], y = res$dados[["produtividade"]],
+          type = "scatter", mode = "markers",
+          marker = list(color = "#2c2c7a", size = 9, opacity = 0.65), name = "Amostras",
+          hovertemplate = paste0(nome_x, ": %{x}<br>Produtividade: %{y} kg/ha<extra></extra>")
+        ) %>%
+          add_trace(x = res$x_seq, y = res$pred, type = "scatter", mode = "lines",
+            line = list(color = "#e67e22", width = 3), name = "Linear-Plat\u00f4") %>%
+          layout(
+            xaxis = list(title = nome_x, gridcolor = "#eee"),
+            yaxis = list(title = "Produtividade (kg/ha)", gridcolor = "#eee"),
+            shapes = list(
+              list(type="line", x0=res$breakpoint, x1=res$breakpoint, y0=0, y1=max(res$dados$produtividade)*1.05,
+                   yref="y", line=list(color="#888", dash="dash", width=2))
+            ),
+            annotations = list(
+              list(x = res$breakpoint, y = max(res$dados$produtividade)*1.02,
+                   text = paste0("Limiar = ", res$breakpoint),
+                   showarrow = FALSE, font = list(size = 11, color="#555"))
+            ),
+            paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+            margin = list(t = 30), showlegend = TRUE
+          )
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-graph-up-arrow"></i> Linear-Plat\u00f4 \u2014 ', nome_x,
+                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_linear_plato", height = "440px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interpretar_linear_plato(res, nome_x)))
+          )
+        )
+        list(ui = ui_out, plot = scatter)
+      }
+    )
+  })
+
+  # --- Renderiza o resultado (UI textual/tabelas) ---
+  output$pesq_estat_resultado <- renderUI({
+    if (!pesq_clicado()) return(NULL)
+    res <- pesq_resultado_calc()
+    res$ui
+  })
+
+  # --- Renderiza os gráficos plotly correspondentes ao tipo de análise ---
+  output$pesq_plot_correlacao <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
+    res$plot
+  })
+  output$pesq_plot_regressao <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
+    res$plot
+  })
+  output$pesq_plot_regressao_multipla <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
+    res$plot
+  })
+  output$pesq_plot_trilha <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
+    res$plot
+  })
+  output$pesq_plot_anova <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
+    res$plot
+  })
+  output$pesq_plot_pca <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
+    res$plot
+  })
+  output$pesq_plot_cluster <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
+    res$plot
+  })
+  output$pesq_plot_cate_nelson <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
+    res$plot
+  })
+  output$pesq_plot_linear_plato <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
+    res$plot
   })
 
 }  # fim server

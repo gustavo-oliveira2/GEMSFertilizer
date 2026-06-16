@@ -1,7 +1,7 @@
 # GEMSFertilizer <img src="man/figures/logo.png" align="right" height="120" alt="" />
 
 <!-- badges -->
-[![R-CMD-check](https://github.com/gustavo-oliveira2/GEMSFertilizer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/gustavo-oliveira2/GEMSFertilizer/actions/workflows/R-CMD-check.yaml)
+[![R-CMD-check](https://github.com/seu_usuario/GEMSFertilizer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/seu_usuario/GEMSFertilizer/actions/workflows/R-CMD-check.yaml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![R](https://img.shields.io/badge/R-%3E%3D4.1-276DC3?logo=r)](https://www.r-project.org/)
 
@@ -19,7 +19,7 @@ if (!requireNamespace("remotes", quietly = TRUE))
   install.packages("remotes")
 
 # Instalar o GEMSFertilizer direto do GitHub
-remotes::install_github("gustavo-oliveira2/GEMSFertilizer")
+remotes::install_github("seu_usuario/GEMSFertilizer")
 ```
 
 ## Uso

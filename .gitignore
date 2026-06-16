@@ -24,5 +24,3 @@ inst/app/data/precos_referencia_local.csv
 # OS
 .DS_Store
 Thumbs.db
-.httr-oauth
-.quarto

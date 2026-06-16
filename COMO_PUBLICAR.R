@@ -35,7 +35,7 @@ usethis::use_github(private = FALSE)            # Cria o repo e faz o push
 #    git add .
 #    git commit -m "feat: versão inicial do pacote GEMSFertilizer v0.1.0"
 #    git branch -M main
-#    git remote add origin https://github.com/gustavo-oliveira2/GEMSFertilizer.git
+#    git remote add origin https://github.com/SEU_USUARIO/GEMSFertilizer.git
 #    git push -u origin main
 
 # ==============================================================================
@@ -58,7 +58,7 @@ usethis::use_github(private = FALSE)            # Cria o repo e faz o push
 # PASSO 6 — Qualquer usuário R instala com:
 # ==============================================================================
 # install.packages("remotes")
-# remotes::install_github("gustavo-oliveira2/GEMSFertilizer")
+# remotes::install_github("SEU_USUARIO/GEMSFertilizer")
 # GEMSFertilizer::run_app()
 
 # ==============================================================================
@@ -66,7 +66,7 @@ usethis::use_github(private = FALSE)            # Cria o repo e faz o push
 # ==============================================================================
 usethis::use_pkgdown_github_pages()  # Configura GitHub Pages automaticamente
 pkgdown::build_site()                # Gera site local para prévia
-# Após o push, o site fica em: https://gustavo-oliveira2.github.io/GEMSFertilizer/
+# Após o push, o site fica em: https://SEU_USUARIO.github.io/GEMSFertilizer/
 
 # ==============================================================================
 # ATUALIZAÇÕES FUTURAS

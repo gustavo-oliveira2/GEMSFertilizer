@@ -2,11 +2,8 @@
 # MÓDULO DE PREÇOS — Opção D (CSV) + Scraping CEPEA (opcional)
 # ==============================================================================
 
-# Caminho do CSV de referência
-# Se app.R já definiu PRECOS_CSV (modo pacote), respeita; senão usa default local
-if (!exists("PRECOS_CSV")) {
-  PRECOS_CSV <- "data/precos_referencia.csv"
-}
+# Caminho do CSV de referência (relativo à raiz do app)
+PRECOS_CSV <- "data/precos_referencia.csv"
 
 # ------------------------------------------------------------------------------
 # CARREGAR PREÇOS DO CSV (Opção D)
@@ -52,107 +49,174 @@ salvar_precos_csv <- function(df) {
 # Tenta buscar indicadores de insumos agrícolas do CEPEA
 # URL: https://www.cepea.esalq.usp.br/br/indicador/insumos-agropecuarios.aspx
 # ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# SCRAPING CEPEA / AGROLINK / NOTÍCIAS AGRÍCOLAS
+#
+# PROBLEMA CONHECIDO: CEPEA e AgroLink bloqueiam user-agents genéricos e
+# usam JavaScript para renderizar preços (conteúdo dinâmico). A estratégia
+# abaixo usa cabeçalhos de navegador completos + múltiplas fontes alternativas.
+# ------------------------------------------------------------------------------
 scrape_cepea <- function() {
-  
-  # Produtos monitorados pelo CEPEA e seus nomes no CSV
-  # O CEPEA publica: Ureia, MAP, KCl, SFT, DAP, Sulfato de Amônio
-  mapa_produtos <- list(
-    list(
-      cepea_termo  = c("ureia", "ur\u00e9ia"),
-      csv_produto  = "Ureia (45% N)",
-      nutriente    = "N"
-    ),
-    list(
-      cepea_termo  = c("map", "fosfato monoam\u00f4nico"),
-      csv_produto  = c("MAP (10% N)", "MAP (48% P\u2082O\u2085)"),
-      nutriente    = c("N", "P2O5")
-    ),
-    list(
-      cepea_termo  = c("kcl", "cloreto de pot\u00e1ssio"),
-      csv_produto  = "KCl (60% K\u2082O)",
-      nutriente    = "K2O"
-    ),
-    list(
-      cepea_termo  = c("superfosfato triplo", "sft"),
-      csv_produto  = "Superfosfato Triplo (46% P\u2082O\u2085)",
-      nutriente    = "P2O5"
-    ),
-    list(
-      cepea_termo  = c("dap", "fosfato diam\u00f4nico"),
-      csv_produto  = c("DAP (18% N)", "DAP (46% P\u2082O\u2085)"),
-      nutriente    = c("N", "P2O5")
-    ),
-    list(
-      cepea_termo  = c("sulfato de am\u00f4nio", "sulfato am\u00f4nio"),
-      csv_produto  = "Sulfato de Am\u00f4nio (21% N)",
-      nutriente    = "N"
-    )
-  )
-  
+
   resultado <- list(
-    sucesso   = FALSE,
-    precos    = list(),
-    mensagem  = "",
-    data      = format(Sys.Date(), "%d/%m/%Y"),
-    fonte     = "CEPEA/ESALQ"
+    sucesso  = FALSE,
+    precos   = list(),
+    mensagem = "",
+    data     = format(Sys.Date(), "%d/%m/%Y"),
+    fonte    = "CEPEA/ESALQ"
   )
-  
-  # ---- Tentativa 1: página de insumos do CEPEA ----
-  url_cepea <- "https://www.cepea.esalq.usp.br/br/indicador/insumos-agropecuarios.aspx"
-  
-  resposta <- tryCatch(
-    httr::GET(url_cepea,
-      httr::timeout(15),
-      httr::user_agent("Mozilla/5.0 (compatible; GEMS_Fertilizer/1.0)")
-    ),
-    error = function(e) NULL
+
+  # Cabeçalhos que imitam um navegador Chrome real
+  headers_chrome <- c(
+    "User-Agent"      = paste0("Mozilla/5.0 (Windows NT 10.0; Win64; x64) ",
+                               "AppleWebKit/537.36 (KHTML, like Gecko) ",
+                               "Chrome/124.0.0.0 Safari/537.36"),
+    "Accept"          = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language" = "pt-BR,pt;q=0.9,en;q=0.8",
+    "Accept-Encoding" = "gzip, deflate, br",
+    "Connection"      = "keep-alive",
+    "Upgrade-Insecure-Requests" = "1",
+    "Sec-Fetch-Dest"  = "document",
+    "Sec-Fetch-Mode"  = "navigate",
+    "Sec-Fetch-Site"  = "none",
+    "Cache-Control"   = "max-age=0"
   )
-  
-  if (!is.null(resposta) && httr::status_code(resposta) == 200) {
-    html_text <- httr::content(resposta, "text", encoding = "UTF-8")
-    
-    # Tenta extrair tabelas com rvest (se disponível) ou regex
-    precos_extraidos <- extrair_precos_html(html_text, mapa_produtos)
-    
-    if (length(precos_extraidos) > 0) {
-      resultado$sucesso  <- TRUE
-      resultado$precos   <- precos_extraidos
-      resultado$mensagem <- paste0("✓ ", length(precos_extraidos), " produto(s) atualizados via CEPEA em ", resultado$data)
-      return(resultado)
-    }
+
+  # Produtos buscados e seus nomes no CSV
+  mapa_produtos <- list(
+    list(termos = c("ureia", "ur\u00e9ia", "urea"),
+         produtos = "Ureia (45% N)", nutriente = "N"),
+    list(termos = c("map", "fosfato monoam\u00f4nico", "monoamonium"),
+         produtos = c("MAP (10% N)", "MAP (48% P\u2082O\u2085)"), nutriente = c("N","P2O5")),
+    list(termos = c("kcl", "cloreto de pot\u00e1ssio", "potassio"),
+         produtos = "KCl (60% K\u2082O)", nutriente = "K2O"),
+    list(termos = c("superfosfato triplo", "sft", "triple superphosphate"),
+         produtos = "Superfosfato Triplo (46% P\u2082O\u2085)", nutriente = "P2O5"),
+    list(termos = c("dap", "fosfato diam\u00f4nico", "diammonium"),
+         produtos = c("DAP (18% N)", "DAP (46% P\u2082O\u2085)"), nutriente = c("N","P2O5")),
+    list(termos = c("sulfato de am\u00f4nio", "sulfato am\u00f4nio", "ammonium sulfate"),
+         produtos = "Sulfato de Am\u00f4nio (21% N)", nutriente = "N"),
+    list(termos = c("ssimples", "superfosfato simples", "ssp"),
+         produtos = "Superfosfato Simples (18% P\u2082O\u2085)", nutriente = "P2O5"),
+    list(termos = c("nitrato de am\u00f4nio", "ammonium nitrate"),
+         produtos = "Nitrato de Am\u00f4nio (32% N)", nutriente = "N")
+  )
+
+  # ---- Fonte 1: CEPEA insumos ----
+  precos <- tentar_fonte(
+    url      = "https://www.cepea.esalq.usp.br/br/indicador/insumos-agropecuarios.aspx",
+    headers  = headers_chrome,
+    mapa     = mapa_produtos,
+    timeout  = 20
+  )
+  if (length(precos) > 0) {
+    resultado$sucesso  <- TRUE
+    resultado$precos   <- precos
+    resultado$fonte    <- "CEPEA/ESALQ"
+    resultado$mensagem <- paste0("\u2713 ", length(precos),
+      " produto(s) atualizados via CEPEA em ", resultado$data)
+    return(resultado)
   }
-  
-  # ---- Tentativa 2: AgroLink indicadores ----
-  url_agrolink <- "https://www.agrolink.com.br/cotacoes/insumos"
-  
-  resposta2 <- tryCatch(
-    httr::GET(url_agrolink,
-      httr::timeout(15),
-      httr::user_agent("Mozilla/5.0 (compatible; GEMS_Fertilizer/1.0)")
-    ),
-    error = function(e) NULL
+
+  # ---- Fonte 2: AgroLink cotações ----
+  precos <- tentar_fonte(
+    url      = "https://www.agrolink.com.br/cotacoes/insumos",
+    headers  = c(headers_chrome,
+                 "Referer" = "https://www.google.com.br/"),
+    mapa     = mapa_produtos,
+    timeout  = 20
   )
-  
-  if (!is.null(resposta2) && httr::status_code(resposta2) == 200) {
-    html_text2 <- httr::content(resposta2, "text", encoding = "UTF-8")
-    precos_extraidos2 <- extrair_precos_html(html_text2, mapa_produtos)
-    
-    if (length(precos_extraidos2) > 0) {
-      resultado$sucesso  <- TRUE
-      resultado$precos   <- precos_extraidos2
-      resultado$fonte    <- "AgroLink"
-      resultado$mensagem <- paste0("✓ ", length(precos_extraidos2), " produto(s) atualizados via AgroLink em ", resultado$data)
-      return(resultado)
-    }
+  if (length(precos) > 0) {
+    resultado$sucesso  <- TRUE
+    resultado$precos   <- precos
+    resultado$fonte    <- "AgroLink"
+    resultado$mensagem <- paste0("\u2713 ", length(precos),
+      " produto(s) atualizados via AgroLink em ", resultado$data)
+    return(resultado)
   }
-  
-  # ---- Falhou ----
+
+  # ---- Fonte 3: Notícias Agrícolas (fertilizantes) ----
+  precos <- tentar_fonte(
+    url      = "https://www.noticiasagricolas.com.br/cotacoes/fertilizantes",
+    headers  = c(headers_chrome,
+                 "Referer" = "https://www.google.com.br/"),
+    mapa     = mapa_produtos,
+    timeout  = 20
+  )
+  if (length(precos) > 0) {
+    resultado$sucesso  <- TRUE
+    resultado$precos   <- precos
+    resultado$fonte    <- "Not\u00edcias Agr\u00edcolas"
+    resultado$mensagem <- paste0("\u2713 ", length(precos),
+      " produto(s) atualizados via Not\u00edcias Agr\u00edcolas em ", resultado$data)
+    return(resultado)
+  }
+
+  # ---- Fonte 4: Canal Rural ----
+  precos <- tentar_fonte(
+    url      = "https://www.canalrural.com.br/cotacoes/insumos-agricolas/",
+    headers  = c(headers_chrome,
+                 "Referer" = "https://www.google.com.br/"),
+    mapa     = mapa_produtos,
+    timeout  = 20
+  )
+  if (length(precos) > 0) {
+    resultado$sucesso  <- TRUE
+    resultado$precos   <- precos
+    resultado$fonte    <- "Canal Rural"
+    resultado$mensagem <- paste0("\u2713 ", length(precos),
+      " produto(s) atualizados via Canal Rural em ", resultado$data)
+    return(resultado)
+  }
+
+  # ---- Falhou em todas as fontes ----
   resultado$mensagem <- paste0(
-    "⚠ Não foi possível conectar às fontes de preços online. ",
-    "Verifique sua conexão com a internet. ",
-    "Os preços do arquivo local continuarão sendo usados."
+    "\u26a0 N\u00e3o foi poss\u00edvel obter pre\u00e7os online. ",
+    "Isso ocorre quando os sites usam JavaScript din\u00e2mico para carregar pre\u00e7os ",
+    "(bot\u00f5es que s\u00f3 funcionam em navegador real) ou bloqueiam requisi\u00e7\u00f5es autom\u00e1ticas. ",
+    "Os pre\u00e7os do arquivo local continuam sendo usados. ",
+    "Atualize os pre\u00e7os manualmente na tabela abaixo."
   )
   return(resultado)
+}
+
+# ------------------------------------------------------------------------------
+# TENTAR FONTE: faz GET com headers completos e extrai preços
+# ------------------------------------------------------------------------------
+tentar_fonte <- function(url, headers, mapa, timeout = 20) {
+
+  resposta <- tryCatch(
+    do.call(httr::GET, c(
+      list(url      = url,
+           httr::timeout(timeout)),
+      lapply(seq_along(headers), function(i)
+        httr::add_headers(.headers = setNames(headers[i], names(headers)[i]))
+      )
+    )),
+    error = function(e) NULL
+  )
+
+  # Simplificado: usa httr::add_headers de uma vez
+  resposta <- tryCatch(
+    httr::GET(
+      url     = url,
+      config  = httr::add_headers(.headers = headers),
+      httr::timeout(timeout)
+    ),
+    error = function(e) NULL
+  )
+
+  if (is.null(resposta)) return(list())
+  if (httr::status_code(resposta) != 200) return(list())
+
+  html_text <- tryCatch(
+    httr::content(resposta, "text", encoding = "UTF-8"),
+    error = function(e) ""
+  )
+
+  if (nchar(html_text) < 500) return(list())  # página vazia/JS-only
+
+  extrair_precos_html(html_text, mapa)
 }
 
 # ------------------------------------------------------------------------------
@@ -161,42 +225,40 @@ scrape_cepea <- function() {
 # ------------------------------------------------------------------------------
 extrair_precos_html <- function(html_text, mapa_produtos) {
   precos <- list()
-  
-  # Estratégia 1: usar rvest se disponível
+
+  # Estratégia 1: usar rvest (tabelas HTML)
   if (requireNamespace("rvest", quietly = TRUE)) {
     tryCatch({
-      pagina <- rvest::read_html(html_text)
+      pagina  <- rvest::read_html(html_text)
       tabelas <- rvest::html_table(pagina, fill = TRUE)
-      
+
       for (tab in tabelas) {
         if (ncol(tab) < 2) next
-        tab_txt <- apply(tab, 2, tolower)
-        
+        tab_txt <- apply(tab, 2, function(x) tolower(as.character(x)))
+
         for (mp in mapa_produtos) {
-          for (termo in mp$cepea_termo) {
-            # Procura linhas que contenham o produto
-            linhas <- which(apply(tab_txt, 1, function(r) any(grepl(termo, r, fixed = TRUE))))
+          for (termo in mp$termos) {
+            linhas <- which(apply(tab_txt, 1,
+                                   function(r) any(grepl(termo, r, fixed = TRUE))))
             if (length(linhas) == 0) next
-            
+
             for (ln in linhas) {
               row_vals <- as.character(tab[ln, ])
-              # Extrai valor numérico (padrão BR: 1.234,56 ou 1234.56)
-              nums <- regmatches(row_vals, gregexpr("[0-9]+[.,][0-9]+", row_vals))
-              nums_clean <- unlist(lapply(nums, function(x) {
-                x <- gsub("\\.", "", x)   # remove separador de milhar
-                x <- gsub(",", ".", x)    # decimal para ponto
-                as.numeric(x)
-              }))
-              nums_clean <- nums_clean[!is.na(nums_clean) & nums_clean > 0.5 & nums_clean < 50]
-              
-              if (length(nums_clean) > 0) {
-                preco <- nums_clean[1]
-                # Normaliza: CEPEA publica por tonelada — converte para kg
-                if (preco > 100) preco <- preco / 1000
-                
-                for (prod in mp$csv_produto) {
-                  precos[[prod]] <- preco
-                }
+              nums <- regmatches(row_vals,
+                                  gregexpr("[0-9]{1,4}[.,][0-9]{2}", row_vals))
+              nums_clean <- suppressWarnings(as.numeric(
+                gsub(",", ".", gsub("\\.", "", unlist(nums)))
+              ))
+              # Faixa plausível: R$0,50/kg a R$25/kg para fertilizantes
+              validos <- nums_clean[!is.na(nums_clean) & nums_clean > 0.5 & nums_clean < 25]
+              # Valores > 25 podem ser R$/t → converte dividindo por 1000
+              em_tonelada <- nums_clean[!is.na(nums_clean) & nums_clean >= 100 & nums_clean < 25000]
+              if (length(em_tonelada) > 0 && length(validos) == 0) {
+                validos <- em_tonelada / 1000
+              }
+
+              if (length(validos) > 0) {
+                for (prod in mp$produtos) precos[[prod]] <- validos[1]
                 break
               }
             }
@@ -206,30 +268,42 @@ extrair_precos_html <- function(html_text, mapa_produtos) {
       }
     }, error = function(e) NULL)
   }
-  
-  # Estratégia 2: regex direto no HTML (fallback)
+
+  # Estratégia 2: regex direto no HTML (fallback para conteúdo não-tabular)
   if (length(precos) == 0) {
+    html_lower <- tolower(html_text)
     for (mp in mapa_produtos) {
-      for (termo in mp$cepea_termo) {
-        # Padrão: nome do produto seguido de valor monetário em até 200 chars
-        padrao <- paste0("(?i)", termo, ".{0,200}?R\\$\\s*([0-9]+[.,][0-9]+)")
-        m <- regmatches(html_text, regexpr(padrao, html_text, perl = TRUE))
-        
-        if (length(m) > 0 && nchar(m) > 0) {
-          val_str <- regmatches(m, regexpr("[0-9]+[.,][0-9]+\\s*$", m))
-          if (length(val_str) > 0) {
-            val <- as.numeric(gsub(",", ".", gsub("\\.", "", val_str)))
-            if (!is.na(val) && val > 0.5 && val < 50) {
-              for (prod in mp$csv_produto) {
-                precos[[prod]] <- val
-              }
-            }
+      for (termo in mp$termos) {
+        pos <- gregexpr(termo, html_lower, fixed = TRUE)[[1]]
+        if (pos[1] == -1) next
+
+        for (p in pos) {
+          trecho <- substr(html_text, p, p + 400)
+          # Padrão R$ seguido de número
+          m <- regmatches(trecho,
+                           regexpr("R\\$\\s*([0-9]+[.,][0-9]+)", trecho, perl = TRUE))
+          if (length(m) == 0 || nchar(m) == 0) {
+            # Tenta apenas número com vírgula (sem R$)
+            m <- regmatches(trecho,
+                             regexpr("[0-9]{1,4},[0-9]{2}", trecho, perl = TRUE))
           }
+          if (length(m) == 0 || nchar(m) == 0) next
+
+          val_str <- regmatches(m, regexpr("[0-9]+[.,][0-9]+", m))
+          if (length(val_str) == 0) next
+          val <- suppressWarnings(as.numeric(gsub(",", ".", gsub("\\.", "", val_str))))
+          if (is.na(val) || val <= 0) next
+          if (val >= 100) val <- val / 1000  # R$/t → R$/kg
+          if (val < 0.5 || val > 25) next
+
+          for (prod in mp$produtos) precos[[prod]] <- val
+          break
         }
+        if (length(precos) > 0) break
       }
     }
   }
-  
+
   return(precos)
 }
 
