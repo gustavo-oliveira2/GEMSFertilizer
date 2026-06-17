@@ -1,24 +1,35 @@
 Package: GEMSFertilizer
 Title: Sistema de Recomendacao de Adubacao e Calagem para Culturas Agricolas
-Version: 0.2.0
-Date: 2025-01-01
+Version: 0.3.0
+Date: 2026-06-16
 Authors@R: 
     person(
       given   = "GEMS",
       family  = "Research Group",
       role    = c("aut", "cre"),
-      email   = "contato@gems.agro.br",
-      comment = c(ORCID = "")
+      email   = "gustavooliveira@academico.ufs.br",
+      comment = c(ORCID = "0000-0002-3839-6261")
     )
 Description: 
     Aplicativo Shiny interativo para recomendacao de adubacao mineral (N, P2O5, K2O),
-    calagem e gessagem de culturas agricolas. Baseado no Manual de Adubacao e Calagem
-    para Minas Gerais - 5a Aproximacao (2023) e no Manual de Recomendacoes de Adubacao
-    e Calagem do Estado de Sergipe (EMBRAPA/UFS). Inclui modulo de pesquisa agricola
-    com conversao de doses por hectare para unidades experimentais (metro linear, cova,
-    vaso e parcela), busca de precos de fertilizantes via CEPEA/AgroLink, e graficos
-    interativos de fertilidade do solo. Culturas suportadas: milho, feijao,
-    cana-de-acucar, arroz, mandioca, amendoim, sorgo, pastagem e abacaxi.
+    calagem e gessagem de culturas agricolas, com modulo completo de pesquisa agricola
+    e analises estatisticas avancadas. Baseado no Manual de Adubacao e Calagem para
+    Minas Gerais - 5a Aproximacao (2023) e no Manual de Recomendacoes de Adubacao e
+    Calagem do Estado de Sergipe (EMBRAPA). Funcionalidades: (1) interpretacao
+    automatizada de analises de solo (pH, materia organica, macronutrientes, micro-
+    nutrientes); (2) recomendacao de adubacao NPK para 9 culturas, calagem por 3
+    metodos (saturacao por bases, neutralizacao de Al, tampao SMP) e gessagem por 3
+    metodos (textura, V% subsolo, saturacao por Ca na CTCef); (3) analise financeira
+    comparativa entre 16 fontes comerciais de fertilizantes; (4) modo pesquisa com
+    conversao de doses ha-1 para unidades experimentais (metro linear, cova, vaso,
+    parcela); (5) banco regional de fertilidade com mapas coropleticos, estatisticas
+    por municipio, serie temporal e benchmarking via geobr e leaflet; (6) 11 analises
+    estatisticas: descritiva completa com testes de normalidade (Shapiro-Wilk,
+    Kolmogorov-Smirnov), ANOVA parametrica, Kruskal-Wallis, Mann-Whitney com pos-hoc
+    de Dunn (Bonferroni), correlacao, regressao simples e multipla com VIF, analise
+    de trilha (efeitos diretos e indiretos), PCA, cluster k-means, Cate-Nelson e
+    linear-plato para calibracao de limiares criticos. Culturas suportadas: milho,
+    feijao, cana-de-acucar, arroz, mandioca, amendoim, sorgo, pastagem e abacaxi.
 License: GPL (>= 3)
 License_file: LICENSE
 URL: https://github.com/gustavo-oliveira2/GEMSFertilizer
