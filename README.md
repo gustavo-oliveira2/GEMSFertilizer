@@ -7,7 +7,7 @@
 
 > **Sistema interativo de recomendação de adubação mineral, calagem e gessagem para culturas agrícolas**
 
-Baseado no **Manual de Adubação e Calagem para Minas Gerais — 5ª Aproximação (2023)** e no **Manual de Recomendações de Adubação e Calagem do Estado de Sergipe (EMBRAPA)**.
+Baseado no **Manual de Adubação e Calagem para Minas Gerais — 5ª Aproximação (2023)** e no **Manual de Recomendações de Adubação e Calagem do Estado de Sergipe (EMBRAPA/UFS)**.
 
 ---
 
