@@ -141,6 +141,539 @@ server <- function(input, output, session) {
     )
   })
   
+  observeEvent(input$btn_salvar_precos, {
+    df  <- rv_precos()
+    ok  <- salvar_precos_csv(df)
+    
+    showNotification(
+      if (ok)
+        HTML('<i class="bi bi-check-circle-fill"></i> Preços salvos em <b>data/precos_referencia.csv</b>')
+      else
+        HTML('<i class="bi bi-x-circle-fill"></i> Erro ao salvar. Verifique permissões de escrita.'),
+      type    = if (ok) "message" else "error",
+      duration = 4
+    )
+  })
+
+  # --------------------------------------------------------------------------
+  # NÍVEL TECNOLÓGICO
+  # --------------------------------------------------------------------------
+
+  # Renderiza o checklist agrupado por categoria
+  output$checklist_tratos_ui <- renderUI({
+    cats <- categorias_checklist()
+    tagList(lapply(cats, function(cat_group) {
+      div(style = "margin-bottom:10px;",
+        div(style = paste0("font-size:10px; font-weight:700; color:#1B3A2D; ",
+                            "text-transform:uppercase; letter-spacing:0.4px; ",
+                            "margin-bottom:5px; padding-bottom:3px; ",
+                            "border-bottom:1px solid #E8E8E8;"),
+          cat_group$cat
+        ),
+        lapply(cat_group$itens, function(item) {
+          div(style = "display:flex; align-items:flex-start; gap:8px; margin-bottom:6px;",
+            div(style = "padding-top:1px;",
+              checkboxInput(
+                inputId = paste0("trato_", item$id),
+                label   = NULL,
+                value   = FALSE,
+                width   = "20px"
+              )
+            ),
+            div(style = "font-size:12px; color:#444; line-height:1.4;",
+              item$label,
+              span(style = paste0("font-size:9px; font-weight:700; margin-left:4px; ",
+                                   "padding:1px 5px; border-radius:10px; ",
+                                   "background:", if(item$nivel_min=="alto") "#E3F2FD"
+                                                  else "#E8F5E9", "; ",
+                                   "color:", if(item$nivel_min=="alto") "#1565C0"
+                                              else "#2E7D32", ";"),
+                if(item$nivel_min=="alto") "Alta" else "M\u00e9dia"
+              )
+            )
+          )
+        })
+      )
+    }))
+  })
+
+  # Reativo: itens marcados
+  rv_tratos_marcados <- reactive({
+    ids <- sapply(CHECKLIST_TRATOS, function(x) x$id)
+    marcados <- ids[sapply(ids, function(id) {
+      v <- input[[paste0("trato_", id)]]
+      !is.null(v) && isTRUE(v)
+    })]
+    marcados
+  })
+
+  # Reativo: classificação do nível
+  rv_nivel_tec <- reactive({
+    classificar_nivel(rv_tratos_marcados())
+  })
+
+  # Badge no cabeçalho do card
+  output$badge_nivel_tec <- renderUI({
+    res <- rv_nivel_tec()
+    span(style = paste0("margin-left:8px; padding:2px 10px; border-radius:12px; ",
+                         "font-size:10px; font-weight:700; color:white; ",
+                         "background:", res$cor, ";"),
+      res$nivel_label
+    )
+  })
+
+  # Card de resultado da classificação
+  output$resultado_nivel_tec <- renderUI({
+    res  <- rv_nivel_tec()
+    marc <- length(rv_tratos_marcados())
+    tot  <- length(CHECKLIST_TRATOS)
+
+    # Barra de progresso
+    pct_bar <- res$pct
+
+    div(style = paste0("background:", res$cor, "15; border:1.5px solid ", res$cor,
+                        "60; border-radius:8px; padding:10px 14px; margin-top:10px;"),
+      # Nível + pontuação
+      div(style = "display:flex; align-items:center; justify-content:space-between;",
+        div(
+          span(style = paste0("font-size:13px; font-weight:700; color:", res$cor, ";"),
+            res$nivel_label),
+          span(style = "font-size:10px; color:#888; margin-left:6px;",
+            paste0(marc, "/", tot, " pr\u00e1ticas marcadas"))
+        ),
+        span(style = paste0("font-size:16px; font-weight:700; color:", res$cor, ";"),
+          paste0(pct_bar, "%")
+        )
+      ),
+      # Barra de progresso
+      div(style = "background:#E0E0E0; border-radius:4px; height:6px; margin:8px 0;",
+        div(style = paste0("background:", res$cor, "; width:", pct_bar, "%; ",
+                            "height:6px; border-radius:4px; transition:width 0.4s;"))
+      ),
+      # Descrição
+      p(style = "font-size:11px; color:#555; margin:4px 0 0;", res$descricao),
+      # Fatores de ajuste
+      if (res$nivel != "medio") {
+        f <- FATORES_NIVEL
+        div(style = "font-size:10px; color:#777; margin-top:6px; font-style:italic;",
+          HTML(paste0('<i class="bi bi-sliders"></i> Ajuste aplicado: ',
+                       'N plantio \u00d7', f$n_plantio[[res$nivel]],
+                       ', N cobertura \u00d7', f$n_cobertura[[res$nivel]],
+                       ', P\u2082O\u2085 \u00d7', f$p2o5[[res$nivel]],
+                       ', K\u2082O \u00d7', f$k2o[[res$nivel]]))
+        )
+      }
+    )
+  })
+
+  # --------------------------------------------------------------------------
+  # TOGGLE MÓDULOS AVANÇADOS (cadeado)
+  # --------------------------------------------------------------------------
+  rv_avancado <- reactiveVal(FALSE)
+
+  observeEvent(input$btn_toggle_avancado, {
+    novo <- !rv_avancado()
+    rv_avancado(novo)
+    ids <- c("tab_lote","tab_pesquisa","tab_regional","tab_clima")
+    if (novo) {
+      for (id in ids) shinyjs::show(id)
+      shinyjs::addClass("btn_toggle_avancado", "desbloqueado")
+      shinyjs::html("btn_toggle_avancado", '<i class="bi bi-unlock-fill"></i>')
+      showNotification(
+        HTML('<i class="bi bi-unlock-fill"></i> M\u00f3dulos avan\u00e7ados liberados.'),
+        type = "message", duration = 3
+      )
+    } else {
+      for (id in ids) shinyjs::hide(id)
+      shinyjs::removeClass("btn_toggle_avancado", "desbloqueado")
+      shinyjs::html("btn_toggle_avancado", '<i class="bi bi-lock-fill"></i>')
+    }
+  })
+
+  # --------------------------------------------------------------------------
+  # --------------------------------------------------------------------------
+  # ANÁLISE EM LOTE — estratégia híbrida: template + upload flexível
+  # --------------------------------------------------------------------------
+  rv_lote_df         <- reactiveVal(NULL)
+  rv_lote_resultados <- reactiveVal(NULL)
+
+  # Download do template
+  output$btn_download_template_lote <- downloadHandler(
+    filename = function() paste0("template_analises_lote_", Sys.Date(), ".xlsx"),
+    content  = function(file) {
+      tmpl <- file.path(getwd(), "template_analises_lote.xlsx")
+      if (!file.exists(tmpl))
+        tmpl <- system.file("app/template_analises_lote.xlsx", package="GEMSFertilizer")
+      if (file.exists(tmpl)) file.copy(tmpl, file)
+      else writeLines("Template não encontrado.", file)
+    }
+  )
+
+  # Upload e leitura da planilha
+  observeEvent(input$lote_file, {
+    req(input$lote_file)
+    rv_lote_resultados(NULL)
+
+    res <- ler_lote(input$lote_file$datapath)
+    if (!is.null(res$erro)) {
+      rv_lote_df(NULL)
+      showNotification(res$erro, type="error", duration=8)
+      return()
+    }
+    rv_lote_df(res$dados)
+    msg <- paste0(res$n, " amostra(s) importada(s).")
+    if (length(res$avisos) > 0)
+      msg <- paste0(msg, " Avisos: ", paste(res$avisos, collapse=" "))
+    showNotification(HTML(paste0('<i class="bi bi-check-circle-fill"></i> ', msg)),
+                     type = if(length(res$avisos)>0) "warning" else "message", duration=5)
+  })
+
+  # Status do upload e mapeamento de colunas detectadas
+  output$lote_upload_status <- renderUI({
+    df <- rv_lote_df()
+    if (is.null(df)) return(NULL)
+    cols_ok    <- intersect(c("ph","mo","p","k","ca","mg","al","h_al"), names(df))
+    cols_falta <- setdiff(c("ph","p","k","ca","mg","al","h_al"), names(df))
+    cor  <- if(length(cols_falta)==0) "#eafaf1" else "#fff8e1"
+    bord <- if(length(cols_falta)==0) "#27ae60" else "#f39c12"
+    ico  <- if(length(cols_falta)==0) "check-circle-fill" else "exclamation-triangle-fill"
+    div(style=paste0("background:",cor,";border-left:3px solid ",bord,
+                     ";padding:8px 12px;border-radius:4px;font-size:12px;margin-top:6px;"),
+      HTML(paste0(
+        '<i class="bi bi-', ico, '"></i> ',
+        "<b>", nrow(df), " amostras</b> carregadas. ",
+        if(length(cols_ok)>0) paste0("Colunas detectadas: <b>",
+          paste(toupper(cols_ok), collapse=", "), "</b>. ") else "",
+        if(length(cols_falta)>0) paste0(
+          "<span style='color:#e67e22;'>Colunas não encontradas: <b>",
+          paste(toupper(cols_falta), collapse=", "), "</b>. ",
+          "Verifique os nomes no arquivo.</span>") else ""
+      ))
+    )
+  })
+
+  # Tabela de revisão editável
+  output$lote_tabela_revisao <- renderUI({
+    df <- rv_lote_df()
+    if (is.null(df)) return(NULL)
+    cols_show <- intersect(c("id_amostra","municipio","ph","mo","p","k",
+                              "ca","mg","al","h_al","argila","p_rem",
+                              "cultura","produtividade","prnt"), names(df))
+    df_show <- df[, cols_show, drop=FALSE]
+    div(class="result-card",
+      div(class="result-card-title",
+        HTML(paste0('<i class="bi bi-table"></i> Passo 3 — Revise os dados ',
+                     '<span class="stat-badge-n">n = ', nrow(df_show), '</span>'))),
+      p(style="font-size:11px;color:#888;margin-bottom:8px;",
+        HTML('<i class="bi bi-pencil-square"></i> ',
+             'Clique em qualquer c\u00e9lula para editar. ',
+             'Valores em branco s\u00e3o tratados como n\u00e3o informados.')),
+      div(style="overflow-x:auto;",
+        DTOutput("lote_dt_editavel")
+      )
+    )
+  })
+
+  output$lote_dt_editavel <- renderDT({
+    df <- rv_lote_df()
+    if (is.null(df)) return(NULL)
+    cols_show <- intersect(c("id_amostra","municipio","ph","mo","p","k",
+                              "ca","mg","al","h_al","argila","p_rem",
+                              "cultura","produtividade","prnt"), names(df))
+    datatable(df[, cols_show, drop=FALSE],
+      rownames=FALSE, selection="none", editable="cell",
+      class="stripe hover compact",
+      options=list(pageLength=15, dom="tip", scrollX=TRUE,
+        language=list(paginate=list(previous="Anterior","next"="Pr\u00f3ximo"))))
+  }, server=FALSE)
+
+  # Salva edições na tabela
+  observeEvent(input$lote_dt_editavel_cell_edit, {
+    df   <- rv_lote_df()
+    info <- input$lote_dt_editavel_cell_edit
+    cols_show <- intersect(c("id_amostra","municipio","ph","mo","p","k",
+                              "ca","mg","al","h_al","argila","p_rem",
+                              "cultura","produtividade","prnt"), names(df))
+    col_name <- cols_show[info$col + 1]
+    novo_val <- info$value
+    # Tenta converter para numérico se a coluna for numérica
+    if (col_name %in% c("ph","mo","p","k","ca","mg","al","h_al","argila","p_rem","prnt"))
+      novo_val <- suppressWarnings(as.numeric(gsub(",",".",novo_val)))
+    df[info$row, col_name] <- novo_val
+    rv_lote_df(df)
+  })
+
+  # Configuração da recomendação (aparece após upload)
+  output$lote_config_rec <- renderUI({
+    if (is.null(rv_lote_df())) return(NULL)
+    df <- rv_lote_df()
+    # Se a planilha já tem coluna "cultura", não pergunta
+    tem_cultura <- "cultura" %in% names(df) && sum(!is.na(df$cultura)) > 0
+    div(class="result-card",
+      div(class="result-card-title",
+        HTML('<i class="bi bi-sliders"></i> Passo 4 — Par\u00e2metros de recomenda\u00e7\u00e3o')),
+      p(style="font-size:11.5px;color:#888;margin-bottom:10px;",
+        if(tem_cultura)
+          HTML('<i class="bi bi-check-circle-fill" style="color:#27ae60;"></i> ',
+               'Cultura detectada na planilha. Os valores abaixo s\u00e3o usados apenas para ',
+               'amostras sem cultura definida.')
+        else
+          HTML('<i class="bi bi-info-circle"></i> Defina os par\u00e2metros para as recomenda\u00e7\u00f5es:')
+      ),
+      div(class="form-row-2",
+        div(class="form-group-custom",
+          label_custom("Cultura padr\u00e3o", "bi-flower1"),
+          selectInput("lote_cultura", NULL, width="100%",
+            choices=c("Milho"="milho","Feij\u00e3o"="feijao","Mandioca"="mandioca",
+                      "Cana-de-a\u00e7\u00facar"="cana","Arroz"="arroz",
+                      "Amendoim"="amendoim","Sorgo"="sorgo",
+                      "Pastagem"="pastagem","Abacaxi"="abacaxi"))
+        ),
+        div(class="form-group-custom",
+          label_custom("Produtividade padr\u00e3o", "bi-graph-up"),
+          selectInput("lote_produtividade", NULL, width="100%",
+            choices=c("Baixa"="baixa","M\u00e9dia"="media","Alta"="alta"),
+            selected="media")
+        )
+      ),
+      div(class="form-row-2",
+        div(class="form-group-custom",
+          label_custom("PRNT do calc\u00e1rio (%)", "bi-calculator"),
+          numericInput("lote_prnt", NULL, value=80, min=30, max=100, step=5, width="100%")
+        ),
+        div()
+      ),
+      div(class="btn-container",
+        actionButton("btn_calcular_lote",
+          HTML('<i class="bi bi-calculator-fill"></i>&nbsp; GERAR RECOMENDA\u00c7\u00d5ES'),
+          class="btn-calcular", width="100%")
+      )
+    )
+  })
+
+  # Cálculo das recomendações
+  observeEvent(input$btn_calcular_lote, {
+    df <- rv_lote_df()
+    req(df)
+    withProgress(message="Calculando recomenda\u00e7\u00f5es...", {
+      resultados <- lapply(seq_len(nrow(df)), function(i) {
+        incProgress(1/nrow(df))
+        am <- df[i, ]
+        # Usa cultura/produtividade da linha se disponível
+        cultura_am <- if (!is.null(am$cultura) && !is.na(am$cultura) && nchar(trimws(am$cultura))>0)
+                        trimws(am$cultura) else input$lote_cultura
+        prod_am    <- if (!is.null(am$produtividade) && !is.na(am$produtividade) && nchar(trimws(am$produtividade))>0)
+                        trimws(am$produtividade) else input$lote_produtividade
+        prnt_am    <- if (!is.null(am$prnt) && !is.na(am$prnt)) am$prnt else input$lote_prnt
+
+        tryCatch({
+          solo <- analisar_solo(
+            ph     = am$ph     %||% NA_real_,
+            mo     = am$mo     %||% NA_real_,
+            p      = am$p      %||% NA_real_,
+            k      = am$k      %||% NA_real_,
+            ca     = am$ca     %||% NA_real_,
+            mg     = am$mg     %||% NA_real_,
+            al     = am$al     %||% NA_real_,
+            h_al   = am$h_al   %||% NA_real_,
+            argila = am$argila %||% NA_real_,
+            p_rem  = am$p_rem  %||% NA_real_
+          )
+          rec <- recomendar_adubacao(
+            cultura=cultura_am, p_nivel=solo$p$interp$nivel,
+            k_nivel=solo$k$interp$nivel, produtividade=prod_am,
+            mo=if(!is.null(solo$mo)) solo$mo$valor else NA_real_,
+            fase="plantio", n_anterior="nenhum", toneladas=80
+          )
+          cal <- calcular_todas_calagen(
+            v_atual=solo$v$valor, ctc=solo$ctc$valor,
+            al=am$al %||% 0, ca=am$ca %||% 0, mg=am$mg %||% 0,
+            v_alvo=(v_alvo_cultura[[cultura_am]]$se) %||% 60,
+            prnt=prnt_am
+          )
+          data.frame(
+            Amostra     = as.character(am$id_amostra %||% paste0("AM-",i)),
+            Municipio   = as.character(am$municipio %||% NA_character_),
+            Cultura     = cultura_am,
+            pH          = am$ph %||% NA_real_,
+            V_pct       = solo$v$valor,
+            Classe_P    = solo$p$interp$nivel,
+            Classe_K    = solo$k$interp$nivel,
+            N_plantio   = rec$N_plantio   %||% NA_real_,
+            N_cobertura = rec$N_cobertura %||% NA_real_,
+            P2O5        = rec$P2O5        %||% NA_real_,
+            K2O         = rec$K2O         %||% NA_real_,
+            NC_V_tha    = round(cal[["V% (5\u00aa Aprox. MG)"]] %||% NA_real_, 2),
+            NC_Al_tha   = round(cal[["Al\u00b3\u207a + Ca+Mg"]] %||% NA_real_, 2),
+            Erro        = NA_character_,
+            stringsAsFactors=FALSE
+          )
+        }, error=function(e) {
+          data.frame(
+            Amostra=as.character(am$id_amostra %||% paste0("AM-",i)),
+            Municipio=NA_character_, Cultura=cultura_am,
+            pH=NA_real_, V_pct=NA_real_, Classe_P=NA_character_, Classe_K=NA_character_,
+            N_plantio=NA_real_, N_cobertura=NA_real_, P2O5=NA_real_, K2O=NA_real_,
+            NC_V_tha=NA_real_, NC_Al_tha=NA_real_,
+            Erro=conditionMessage(e), stringsAsFactors=FALSE
+          )
+        })
+      })
+      rv_lote_resultados(do.call(rbind, resultados))
+    })
+  })
+
+  output$lote_resultados <- renderUI({
+    df_res <- rv_lote_resultados()
+    if (is.null(df_res)) return(NULL)
+    nomes <- c(Amostra="Amostra",Municipio="Munic\u00edpio",Cultura="Cultura",
+               pH="pH",V_pct="V%",Classe_P="Classe P",Classe_K="Classe K",
+               N_plantio="N plant.\n(kg/ha)",N_cobertura="N cob.\n(kg/ha)",
+               P2O5="P\u2082O\u2085\n(kg/ha)",K2O="K\u2082O\n(kg/ha)",
+               NC_V_tha="Calc. V%\n(t/ha)",NC_Al_tha="Calc. Al\n(t/ha)",Erro="Erro")
+    cols <- intersect(names(nomes), names(df_res))
+    if ("Erro" %in% cols && all(is.na(df_res$Erro))) cols <- setdiff(cols,"Erro")
+    # Remove Município se todo NA
+    if ("Municipio" %in% cols && all(is.na(df_res$Municipio))) cols <- setdiff(cols,"Municipio")
+    df_show <- setNames(df_res[,cols,drop=FALSE], nomes[cols])
+    n_erros <- sum(!is.na(df_res$Erro))
+    div(class="result-card",
+      div(class="result-card-title",
+        HTML(paste0('<i class="bi bi-clipboard-check-fill"></i> Recomenda\u00e7\u00f5es \u2014 ',
+                     nrow(df_show), ' amostras',
+                     if(n_erros>0) paste0(' <span style="color:#e74c3c;">| ',n_erros,' com erro</span>') else ''))),
+      div(style="overflow-x:auto;",
+        datatable(df_show, rownames=FALSE, selection="none",
+          class="stripe hover compact", extensions="Buttons",
+          options=list(pageLength=20, dom="Bfrtip", scrollX=TRUE,
+            buttons=list(
+              list(extend="excel",text="Exportar Excel",
+                   filename=paste0("recomendacoes_lote_",Sys.Date())),
+              list(extend="csv",text="Exportar CSV",
+                   filename=paste0("recomendacoes_lote_",Sys.Date()))
+            ),
+            language=list(paginate=list(previous="Anterior","next"="Pr\u00f3ximo"),
+                          search="Buscar:")))
+      )
+    )
+  })
+
+  # --------------------------------------------------------------------------
+  # DADOS CLIMÁTICOS — Open-Meteo
+  # --------------------------------------------------------------------------
+  output$clima_municipios_banco <- renderUI({
+    df_reg <- rv_regional_df()
+    if (is.null(df_reg)) return(NULL)
+    coords <- extrair_coords_municipios(df_reg)
+    if (is.null(coords) || nrow(coords) == 0) return(NULL)
+    choices_mun <- setNames(paste0(coords$latitude, "__", coords$longitude), coords$municipio)
+    div(class = "form-group-custom", style = "margin-bottom:8px;",
+      label_custom("Usar munic\u00edpio do Banco Regional", "bi-pin-map"),
+      selectInput("clima_municipio_banco", NULL, width = "100%",
+        choices = c("Inserir coordenadas manualmente" = "", choices_mun))
+    )
+  })
+
+  observeEvent(input$clima_municipio_banco, {
+    req(nchar(input$clima_municipio_banco) > 0)
+    partes <- strsplit(input$clima_municipio_banco, "__")[[1]]
+    if (length(partes) == 2) {
+      updateNumericInput(session, "clima_lat", value = as.numeric(partes[1]))
+      updateNumericInput(session, "clima_lon", value = as.numeric(partes[2]))
+    }
+  })
+
+  rv_clima_dados <- reactiveVal(NULL)
+
+  observeEvent(input$btn_buscar_clima, {
+    req(input$clima_lat, input$clima_lon)
+    withProgress(message = "Buscando dados clim\u00e1ticos...", {
+      res <- buscar_clima_municipio(
+        lat    = input$clima_lat,
+        lon    = input$clima_lon,
+        inicio = format(input$clima_inicio, "%Y-%m-%d"),
+        fim    = format(input$clima_fim,    "%Y-%m-%d")
+      )
+      if (!is.null(res$erro)) {
+        showNotification(res$erro, type = "error", duration = 8)
+        rv_clima_dados(NULL)
+      } else {
+        rv_clima_dados(res)
+      }
+    })
+  })
+
+  output$clima_resultado <- renderUI({
+    res <- rv_clima_dados()
+    if (is.null(res)) return(NULL)
+    df  <- res$dados
+    men <- resumo_mensal(df)
+
+    chuva_total <- if ("chuva_mm"    %in% names(df)) round(sum(df$chuva_mm, na.rm=TRUE), 1) else NA
+    temp_media  <- if ("temp_media_c"%in% names(df)) round(mean(df$temp_media_c, na.rm=TRUE), 1) else NA
+    et0_total   <- if ("et0_mm"      %in% names(df)) round(sum(df$et0_mm, na.rm=TRUE), 1) else NA
+    balanco_tot <- if (!is.na(chuva_total) && !is.na(et0_total)) chuva_total - et0_total else NA
+    class_bal   <- if (!is.na(balanco_tot)) classificar_balanco(balanco_tot) else "N/D"
+
+    tagList(
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML(paste0('<i class="bi bi-cloud-sun-fill"></i> Per\u00edodo ',
+                       res$inicio, ' a ', res$fim,
+                       ' <span class="stat-badge-n">Lat: ', res$lat, ' | Lon: ', res$lon, '</span>'))),
+        div(class = "metrics-grid",
+          mk_metric(if(!is.na(chuva_total)) paste0(chuva_total,"mm") else "N/D","","Chuva total","",    "#1A5276"),
+          mk_metric(if(!is.na(temp_media))  paste0(temp_media,"\u00b0C") else "N/D","","Temp. m\u00e9dia","","#C0392B"),
+          mk_metric(if(!is.na(et0_total))   paste0(et0_total,"mm") else "N/D","","ET\u2080 total","",  "#27AE60"),
+          mk_metric(if(!is.na(balanco_tot)) paste0(balanco_tot,"mm") else "N/D","","Balan\u00e7o h\u00eddrico","","#B7791F")
+        ),
+        div(style = paste0("font-size:12px;margin-top:10px;padding:8px 12px;border-radius:6px;",
+            if(!is.na(balanco_tot) && balanco_tot < 0) "background:#fff8e1;color:#7d6608;"
+            else "background:#eafaf1;color:#1e8449;"),
+          HTML(paste0('<i class="bi bi-info-circle-fill"></i> ', class_bal))
+        )
+      ),
+      div(class = "result-card",
+        div(class = "result-card-title", HTML('<i class="bi bi-bar-chart-fill"></i> Chuva & Temperatura Mensais')),
+        withSpinner(plotlyOutput("clima_grafico", height = "360px"), type = 8, color = "#1A5276")
+      ),
+      div(class = "result-card",
+        div(class = "result-card-title", HTML('<i class="bi bi-table"></i> Dados Mensais')),
+        datatable(men, rownames=FALSE, selection="none",
+          class="stripe hover compact",
+          options=list(pageLength=12, dom="tip",
+            language=list(paginate=list(previous="Anterior","next"="Pr\u00f3ximo"))))
+      )
+    )
+  })
+
+  output$clima_grafico <- renderPlotly({
+    res <- rv_clima_dados()
+    if (is.null(res)) return(plotly_vazio("Busque dados clim\u00e1ticos acima"))
+    men <- resumo_mensal(res$dados)
+    g <- plot_ly(men)
+    if ("chuva_total_mm" %in% names(men)) {
+      g <- add_trace(g, x=~mes, y=~chuva_total_mm, type="bar",
+        name="Chuva (mm)", marker=list(color="#1A5276"),
+        hovertemplate="%{x}<br>Chuva: %{y:.1f} mm<extra></extra>")
+    }
+    if ("temp_media_c" %in% names(men)) {
+      g <- add_trace(g, x=~mes, y=~temp_media_c, type="scatter", mode="lines+markers",
+        name="Temp. m\u00e9dia (\u00b0C)", yaxis="y2",
+        line=list(color="#C0392B",width=2),
+        marker=list(color="#C0392B",size=6),
+        hovertemplate="%{x}<br>Temp: %{y:.1f}\u00b0C<extra></extra>")
+    }
+    layout(g,
+      xaxis  = list(title="M\u00eas", tickangle=-30),
+      yaxis  = list(title="Chuva (mm)", gridcolor="#eee"),
+      yaxis2 = list(title="Temperatura (\u00b0C)", overlaying="y", side="right"),
+      legend = list(orientation="h", x=0, y=-0.25),
+      paper_bgcolor="transparent", plot_bgcolor="transparent",
+      margin=list(t=10, b=60)
+    )
+  })
+
   # --------------------------------------------------------------------------
   # BOTÃO BUSCAR PREÇOS CEPEA
   # --------------------------------------------------------------------------
@@ -264,21 +797,33 @@ server <- function(input, output, session) {
   # --------------------------------------------------------------------------
   observeEvent(input$calcular, {
     
-    req(input$ph, input$mo, input$p, input$k, input$ca, input$mg, input$al, input$h_al, input$argila)
+    req(input$ph, input$p, input$k, input$ca, input$mg, input$al, input$h_al)
+    # MO, Argila e P-rem são opcionais
+    # Argila é obrigatória apenas se P-rem também não foi informado
+    has_argila <- !is.na(input$argila) && !is.null(input$argila)
+    has_p_rem  <- !is.na(input$p_rem)  && !is.null(input$p_rem)
+    if (!has_argila && !has_p_rem) {
+      showNotification(
+        "Informe a Argila (%) ou o P-rem (mg/L) \u2014 ao menos um \u00e9 necess\u00e1rio para interpretar o f\u00f3sforo.",
+        type = "warning", duration = 6
+      )
+      return(NULL)
+    }
     
     withProgress(message = "Calculando recomendações...", {
       
       # 1. Análise do solo
       solo <- analisar_solo(
-        ph    = input$ph,
-        mo    = input$mo,
-        p     = input$p,
-        k     = input$k,
-        ca    = input$ca,
-        mg    = input$mg,
-        al    = input$al,
-        h_al  = input$h_al,
-        argila = input$argila,
+        ph     = input$ph,
+        mo     = if (is.na(input$mo) || is.null(input$mo)) NA_real_ else input$mo,
+        p      = input$p,
+        k      = input$k,
+        ca     = input$ca,
+        mg     = input$mg,
+        al     = input$al,
+        h_al   = input$h_al,
+        argila = if (is.na(input$argila) || is.null(input$argila)) NA_real_ else input$argila,
+        p_rem  = if (is.na(input$p_rem) || is.null(input$p_rem)) NA_real_ else input$p_rem,
         s     = if (is.na(input$s)) NA else input$s,
         b     = if (is.na(input$b)) NA else input$b,
         cu    = if (is.na(input$cu)) NA else input$cu,
@@ -305,7 +850,7 @@ server <- function(input, output, session) {
       )
       
       gesso_rec <- gessagem(
-        argila  = input$argila,
+        argila  = if (is.na(input$argila) || is.null(input$argila)) 30 else input$argila,
         al_sup  = input$al,
         ca_sup  = input$ca,
         ca_sub  = if (is.na(input$ca_sub)) NA else input$ca_sub,
@@ -313,9 +858,9 @@ server <- function(input, output, session) {
         al_sub  = if (is.na(input$al_sub)) NA else input$al_sub,
         k_sub   = if (is.na(input$k_sub))  NA else input$k_sub
       )
-      
-      # 3. Adubação
-      p_interp <- interpretar_p(input$p, input$argila)
+
+      # 3. Adubação — usa argila_efetiva do solo (já considera P-rem se informado)
+      p_interp <- solo$p$interp  # já calculado com argila_efetiva
       k_interp <- interpretar_k(input$k, solo$ctc$valor)
       
       adub_rec <- recomendar_adubacao(
@@ -323,11 +868,15 @@ server <- function(input, output, session) {
         p_nivel      = p_interp$nivel,
         k_nivel      = k_interp$nivel,
         produtividade = input$produtividade,
-        mo           = input$mo,
+        mo           = if (is.na(input$mo) || is.null(input$mo)) NA_real_ else input$mo,
         fase         = input$fase,
         n_anterior   = input$n_anterior
       )
-      
+
+      # Ajuste pelo nível tecnológico
+      nivel_res <- rv_nivel_tec()
+      adub_rec  <- ajustar_doses_nivel(adub_rec, nivel_res$nivel)
+
       # 4. Custo - usar tabela comparativa com preços reativos
       tabela_custo <- tabela_comparativa(
         dose_n    = adub_rec$N_plantio + adub_rec$N_cobertura,
@@ -336,7 +885,7 @@ server <- function(input, output, session) {
         area      = input$area,
         df_fontes = rv_precos()
       )
-      
+
       dados_rec(list(
         solo      = solo,
         calagem   = calagen_resultados,
@@ -346,7 +895,8 @@ server <- function(input, output, session) {
         v_alvo    = v_alvo,
         cultura   = cultura_sel,
         manual    = manual_sel,
-        area      = input$area
+        area      = input$area,
+        nivel_tec = nivel_res   # salva para o relatório
       ))
       
       setProgress(1, message = "Pronto!")
@@ -359,65 +909,75 @@ server <- function(input, output, session) {
   output$resultado_solo <- renderUI({
     rec <- dados_rec()
     if (is.null(rec)) return(placeholder_ui("layers", "Fertilidade do Solo", "Insira os dados da análise e clique em Calcular para ver o diagnóstico de fertilidade."))
-    
+
     solo <- rec$solo
-    
-    # Determinar classe CSS
-    cls_metric <- function(classe) {
-      switch(trimws(tolower(gsub("[^a-z0-9 ]", "", classe))),
-        "muito baixo" = "cl-muito-baixo",
-        "baixo"       = "cl-baixo",
-        "medio"       = "cl-medio",
-        "moderadamente acido" = "cl-medio",
-        "levemente acido" = "cl-bom",
-        "alto"        = "cl-alto",
-        "muito alto toxico" = "cl-muito-baixo",
-        "muito alto"  = "cl-alto",
-        "alcalino"    = "cl-alcalino",
-        "cl-bom"
-      )
-    }
-    
-    mk_metric <- function(valor, unidade, nome, classe, cor) {
-      cls <- cls_metric(classe)
-      div(class = paste("metric-item", cls),
-        div(class = "metric-value", valor),
-        div(class = "metric-unit", HTML(unidade)),
-        div(class = "metric-name", HTML(nome)),
-        span(class = paste("metric-class", cls), classe)
-      )
-    }
-    
+
     tagList(
       # Parâmetros calculados
       div(class = "result-card",
-        div(class = "result-card-title", HTML('<i class="bi bi-calculator"></i> Parâmetros Calculados')),
+        div(class = "result-card-title", HTML('<i class="bi bi-calculator"></i> Par\u00e2metros Calculados')),
         div(class = "metrics-grid",
-          mk_metric(solo$ctc$valor, "cmol<sub>c</sub> dm<sup>-3</sup>", "CTC", "Calculado", "#333"),
-          mk_metric(solo$sb$valor,  "cmol<sub>c</sub> dm<sup>-3</sup>", "SB", "Calculado", "#333"),
-          mk_metric(paste0(solo$v$valor, "%"), "", "Sat. Bases V%", solo$v$interp$classe, solo$v$interp$cor),
-          mk_metric(paste0(solo$m$valor, "%"), "", "Sat. Al<sup>3+</sup> m%", solo$m$interp$classe, solo$m$interp$cor)
+          mk_metric(solo$ctc$valor, "cmolc/dm\u00b3", "CTC", "Calculado", "#333"),
+          mk_metric(solo$sb$valor,  "cmolc/dm\u00b3", "SB",  "Calculado", "#333"),
+          mk_metric(paste0(solo$v$valor, "%"), "", "V%", solo$v$interp$classe, solo$v$interp$cor),
+          mk_metric(paste0(solo$m$valor, "%"), "", "m%", solo$m$interp$classe, solo$m$interp$cor)
         )
       ),
       # pH e MO
       div(class = "result-card",
-        div(class = "result-card-title", HTML('<i class="bi bi-droplet"></i> Reação do Solo & Matéria Orgânica')),
+        div(class = "result-card-title", HTML('<i class="bi bi-droplet"></i> Rea\u00e7\u00e3o & M.O.')),
         div(class = "metrics-grid",
-          mk_metric(solo$ph$valor, "H<sub>2</sub>O", "pH", solo$ph$interp$classe, solo$ph$interp$cor),
-          mk_metric(solo$mo$valor, "dag kg<sup>-1</sup>", "M.O.", solo$mo$interp$classe, solo$mo$interp$cor),
-          mk_metric(solo$al$valor, "cmol<sub>c</sub> dm<sup>-3</sup>", "Al<sup>3+</sup>", if(solo$al$valor > 0.5) "Alto" else "Baixo", "#333"),
-          mk_metric(solo$h_al$valor, "cmol<sub>c</sub> dm<sup>-3</sup>", "(H+Al)", "Acidez Pot.", "#333")
+          mk_metric(solo$ph$valor, "H\u2082O", "pH", solo$ph$interp$classe, solo$ph$interp$cor),
+          if (!is.null(solo$mo)) {
+            mk_metric(solo$mo$valor, "dag/kg", "M.O.", solo$mo$interp$classe, solo$mo$interp$cor)
+          } else {
+            div(class = "metric-item",
+              div(class = "metric-value", style = "font-size:14px;color:#bbb;", "\u2014"),
+              div(class = "metric-unit", ""),
+              div(class = "metric-name", "M.O."),
+              span(class = "metric-class", style = "background:#f5f5f5;color:#aaa;", "N/I")
+            )
+          }
+        ),
+        if (is.null(solo$mo)) {
+          div(style = "font-size:11px;color:#e67e22;margin-top:6px;",
+            HTML('<i class="bi bi-exclamation-circle"></i> M.O. n\u00e3o informada \u2014 desconto de N por M.O. alta n\u00e3o aplicado.')
+          )
+        }
+      ),
+      # Acidez
+      div(class = "result-card",
+        div(class = "result-card-title", HTML('<i class="bi bi-exclamation-triangle"></i> Acidez do Solo')),
+        div(class = "metrics-grid",
+          mk_metric(solo$al$valor,   "cmolc/dm\u00b3", "Al\u00b3\u207a", if (solo$al$valor > 0.5) "Alto" else "Baixo", "#333"),
+          mk_metric(solo$h_al$valor, "cmolc/dm\u00b3", "H+Al", "Acid. Pot.", "#333")
         )
       ),
       # Macronutrientes
       div(class = "result-card",
         div(class = "result-card-title", HTML('<i class="bi bi-grid-3x3"></i> Macronutrientes')),
         div(class = "metrics-grid",
-          mk_metric(solo$ca$valor, "cmol<sub>c</sub> dm<sup>-3</sup>", "Ca<sup>2+</sup>", solo$ca$interp$classe, solo$ca$interp$cor),
-          mk_metric(solo$mg$valor, "cmol<sub>c</sub> dm<sup>-3</sup>", "Mg<sup>2+</sup>", solo$mg$interp$classe, solo$mg$interp$cor),
-          mk_metric(solo$k$valor,  "mg dm<sup>-3</sup>", "K<sup>+</sup>", solo$k$interp$classe, solo$k$interp$cor),
-          mk_metric(solo$p$valor,  "mg dm<sup>-3</sup>", "P-Mehlich", solo$p$interp$classe, solo$p$interp$cor)
-        )
+          mk_metric(solo$ca$valor, "cmolc/dm\u00b3", "Ca\u00b2\u207a", solo$ca$interp$classe, solo$ca$interp$cor),
+          mk_metric(solo$mg$valor, "cmolc/dm\u00b3", "Mg\u00b2\u207a", solo$mg$interp$classe, solo$mg$interp$cor),
+          mk_metric(solo$k$valor,  "mg/dm\u00b3",    "K\u207a",      solo$k$interp$classe,  solo$k$interp$cor),
+          mk_metric(solo$p$valor,  "mg/dm\u00b3",    "P-Mehlich",   solo$p$interp$classe,  solo$p$interp$cor)
+        ),
+        if (isTRUE(solo$p$usou_p_rem)) {
+          div(style = "font-size:11px;color:#1a5276;margin-top:6px;",
+            HTML(paste0('<i class="bi bi-info-circle-fill"></i> P interpretado via <b>P-rem = ',
+              solo$p$p_rem, ' mg/L</b> (argila equiv. \u2248 ', solo$p$argila_efetiva, '%).'))
+          )
+        } else if (isTRUE(solo$p$usou_fallback)) {
+          div(style = "font-size:11px;color:#e67e22;margin-top:6px;",
+            HTML('<i class="bi bi-exclamation-triangle-fill"></i> Argila e P-rem n\u00e3o informados \u2014 ',
+                 'P interpretado com textura m\u00e9dia (~30% argila). ',
+                 'Informe Argila ou P-rem para maior precis\u00e3o.')
+          )
+        } else {
+          div(style = "font-size:10px;color:#ccc;margin-top:4px;",
+            HTML('<i class="bi bi-lightbulb"></i> Informe o P-rem para interpreta\u00e7\u00e3o mais precisa.')
+          )
+        }
       ),
       # Micronutrientes (se houver)
       if (!all(sapply(solo$micro, is.null))) {
@@ -427,15 +987,77 @@ server <- function(input, output, session) {
             lapply(names(solo$micro), function(nm) {
               m <- solo$micro[[nm]]
               if (!is.null(m)) {
-                mk_metric(m$valor, "mg dm<sup>-3</sup>", nm, m$interp$classe, m$interp$cor)
+                mk_metric(m$valor, "mg/dm\u00b3", nm, m$interp$classe, m$interp$cor)
               }
             })
           )
         )
-      }
+      },
+
+      # ── Estádio Fenológico (milho) ──────────────────────────────────────
+      if (rec$cultura == "milho") {
+        fenol_res <- fenologia_milho(
+          n_cobertura = rec$adubacao$N_cobertura,
+          n_plantio   = rec$adubacao$N_plantio
+        )
+        tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML('<i class="bi bi-flower1"></i> Est\u00e1dio Fenol\u00f3gico \u2014 Momento de Aplica\u00e7\u00e3o de N')),
+            p(style = "font-size:12px;color:#555;margin-bottom:12px;",
+              HTML(fenol_res$descricao)),
+            HTML(fenol_res$svg)
+          )
+        )
+      },
+
+      # ── Botão Relatório ─────────────────────────────────────────────────
+      div(class = "btn-container",
+        downloadButton("btn_download_relatorio",
+          label  = HTML('<i class="bi bi-file-earmark-text"></i>&nbsp; GERAR RELAT\u00d3RIO COMPLETO (PDF/HTML)'),
+          class  = "btn-calcular",
+          style  = "width:100%;background:#1A5276;border-color:#1A5276;"
+        )
+      )
     )
   })
-  
+
+  # --------------------------------------------------------------------------
+  # DOWNLOAD DO RELATÓRIO HTML
+  # --------------------------------------------------------------------------
+  output$btn_download_relatorio <- downloadHandler(
+    filename = function() {
+      paste0("relatorio_fertilidade_", format(Sys.Date(), "%Y%m%d"), ".html")
+    },
+    content = function(file) {
+      rec  <- dados_rec()
+      if (is.null(rec)) { writeLines("Sem dados.", file); return() }
+
+      fenol <- if (rec$cultura == "milho")
+        fenologia_milho(rec$adubacao$N_cobertura, rec$adubacao$N_plantio)
+      else NULL
+
+      html <- gerar_relatorio_html(
+        solo          = rec$solo,
+        rec           = rec$adubacao,
+        cal_result    = rec$calagem,
+        gesso_result  = rec$gessagem,
+        cultura       = rec$cultura,
+        produtividade = input$produtividade,
+        prnt          = input$prnt,
+        info_produtor = list(
+          nome        = input$info_produtor    %||% "",
+          propriedade = input$info_propriedade %||% "",
+          municipio   = input$info_municipio   %||% "",
+          amostra     = input$info_amostra     %||% ""
+        ),
+        fenol     = fenol,
+        nivel_tec = rec$nivel_tec
+      )
+      writeLines(html, file, useBytes = TRUE)
+    }
+  )
+
   # --------------------------------------------------------------------------
   # RESULTADO CALAGEM
   # --------------------------------------------------------------------------
@@ -647,7 +1269,10 @@ server <- function(input, output, session) {
       div(class = "result-card",
         style = "background: linear-gradient(135deg, #1b4332, #2d6a4f); color: white; margin-bottom: 16px;",
         div(class = "result-card-title", style = "color: rgba(255,255,255,0.7); border-bottom-color: rgba(255,255,255,0.15);",
-          HTML(paste0('<i class="bi bi-seedling"></i> ', culturas_lista[[cult]], " | Manual: ", toupper(man)))
+          HTML(paste0('<i class="bi bi-seedling"></i> ', culturas_lista[[cult]], " | Manual: ", toupper(man),
+                       " | N\u00edvel: <span style='color:",
+                       rec$nivel_tec$cor %||% "#aaa", ";font-weight:700;'>",
+                       rec$nivel_tec$nivel_label %||% "M\u00e9dia Tecnologia", "</span>"))
         ),
         div(class = "npk-display",
           div(class = "npk-card npk-n",
@@ -914,7 +1539,7 @@ server <- function(input, output, session) {
     
     vals <- c(
       ph_norm,
-      normalizar(solo$mo$valor, 0, 5),
+      normalizar(if (!is.null(solo$mo)) solo$mo$valor else 2.0, 0, 5),
       normalizar(solo$p$valor, 0, 25),
       normalizar(solo$k$valor, 0, 200),
       normalizar(solo$ca$valor, 0, 6),
@@ -1542,7 +2167,99 @@ server <- function(input, output, session) {
             choices = resumo$municipios)
         ),
         uiOutput("regional_benchmark")
-      )
+      ),
+
+      # ── METAS PERSONALIZADAS ───────────────────────────────────────────────
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-flag-fill"></i> Metas de Fertilidade \u2014 Defina seus limites')),
+        p(style = "font-size:12px;color:#666;margin-bottom:14px;",
+          HTML('<i class="bi bi-info-circle"></i> Defina valores m\u00ednimos ou m\u00e1ximos para cada par\u00e2metro. ',
+               'O sem\u00e1foro regional usa essas metas para classificar cada munic\u00edpio. ',
+               'Deixe em branco para n\u00e3o avaliar o par\u00e2metro.')),
+        div(class = "form-row-2",
+          div(
+            label_custom("pH m\u00ednimo", "bi-thermometer"),
+            numericInput("meta_ph_min", NULL, value=5.5, min=4, max=7, step=0.1, width="100%")
+          ),
+          div(
+            label_custom("V% m\u00ednimo (%)", "bi-percent"),
+            numericInput("meta_v_min", NULL, value=60, min=0, max=100, step=5, width="100%")
+          )
+        ),
+        div(class = "form-row-2",
+          div(
+            label_custom("P m\u00ednimo (mg/dm\u00b3)", "bi-arrow-up"),
+            numericInput("meta_p_min", NULL, value=10, min=0, max=200, step=1, width="100%")
+          ),
+          div(
+            label_custom("K m\u00ednimo (mg/dm\u00b3)", "bi-arrow-up"),
+            numericInput("meta_k_min", NULL, value=60, min=0, max=500, step=10, width="100%")
+          )
+        ),
+        div(class = "form-row-2",
+          div(
+            label_custom("Ca m\u00ednimo (cmolc/dm\u00b3)", "bi-arrow-up"),
+            numericInput("meta_ca_min", NULL, value=1.5, min=0, max=15, step=0.5, width="100%")
+          ),
+          div(
+            label_custom("Al m\u00e1ximo (cmolc/dm\u00b3)", "bi-arrow-down"),
+            numericInput("meta_al_max", NULL, value=0.5, min=0, max=5, step=0.1, width="100%")
+          )
+        ),
+        div(class = "form-row-2",
+          div(
+            label_custom("M.O. m\u00ednima (dag/kg)", "bi-arrow-up"),
+            numericInput("meta_mo_min", NULL, value=1.5, min=0, max=10, step=0.5, width="100%")
+          ),
+          div(
+            label_custom("m% m\u00e1ximo (%)", "bi-arrow-down"),
+            numericInput("meta_m_max", NULL, value=20, min=0, max=100, step=5, width="100%")
+          )
+        ),
+        div(class = "btn-container",
+          actionButton("btn_gerar_semaforo",
+            HTML('<i class="bi bi-play-fill"></i>&nbsp; GERAR SEM\u00c1FORO REGIONAL'),
+            class = "btn-calcular", width = "100%")
+        )
+      ),
+
+      # ── SEMÁFORO REGIONAL ─────────────────────────────────────────────────
+      uiOutput("regional_semaforo"),
+
+      # ── CRUZAMENTO CLIMA × FERTILIDADE ────────────────────────────────────
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-cloud-sun-fill"></i> Cruzamento Clima \u00d7 Fertilidade')),
+        p(style = "font-size:12px;color:#666;margin-bottom:12px;",
+          HTML('<i class="bi bi-info-circle"></i> Busca dados clim\u00e1ticos para cada munic\u00edpio ',
+               'do banco (requer coordenadas na planilha) e calcula a correla\u00e7\u00e3o entre ',
+               'chuva/temperatura e os atributos do solo. Per\u00edodo: \u00faltimos 12 meses.')),
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Atributo do solo (Y)", "bi-thermometer-half"),
+            selectInput("clima_banco_atrib", NULL, width="100%",
+              choices = setNames(names(nomes_atributos_regional), nomes_atributos_regional),
+              selected = "ph")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Vari\u00e1vel clim\u00e1tica (X)", "bi-cloud-rain"),
+            selectInput("clima_banco_var", NULL, width="100%",
+              choices = c("Chuva total anual (mm)"="chuva_mm",
+                          "Temperatura m\u00e9dia anual (\u00b0C)"="temp_media_c",
+                          "ET\u2080 total anual (mm)"="et0_mm",
+                          "Balan\u00e7o h\u00eddrico (mm)"="balanco_hidrico_mm"))
+          )
+        ),
+        div(class = "btn-container",
+          actionButton("btn_cruzar_clima",
+            HTML('<i class="bi bi-cloud-download"></i>&nbsp; BUSCAR CLIMA DOS MUNIC\u00cdPIOS E CRUZAR'),
+            class = "btn-calcular", width = "100%")
+        ),
+        p(style="font-size:10.5px;color:#aaa;margin-top:6px;",
+          HTML('<i class="bi bi-clock"></i> A busca pode levar 10\u201330 segundos dependendo do n\u00famero de munic\u00edpios.'))
+      ),
+      uiOutput("regional_clima_cruzamento")
     )
   })
 
@@ -1708,6 +2425,314 @@ server <- function(input, output, session) {
   })
 
   # --------------------------------------------------------------------------
+  # SEMÁFORO REGIONAL
+  # --------------------------------------------------------------------------
+  output$regional_semaforo <- renderUI({
+    input$btn_gerar_semaforo
+    isolate({
+      df <- rv_regional_df()
+      if (is.null(df)) return(NULL)
+
+      # Metas definidas pelo usuário
+      metas <- list(
+        ph    = list(min = input$meta_ph_min, max = NULL),
+        mo    = list(min = input$meta_mo_min, max = NULL),
+        p     = list(min = input$meta_p_min,  max = NULL),
+        k     = list(min = input$meta_k_min,  max = NULL),
+        ca    = list(min = input$meta_ca_min, max = NULL),
+        al    = list(min = NULL, max = input$meta_al_max),
+        v_pct = list(min = input$meta_v_min,  max = NULL),
+        m_pct = list(min = NULL, max = input$meta_m_max)
+      )
+
+      municipios <- sort(unique(df$municipio[!is.na(df$municipio)]))
+      params     <- names(metas)
+
+      # Calcula % de amostras fora da meta por município × parâmetro
+      classificar_mun_param <- function(mun, param) {
+        meta <- metas[[param]]
+        col  <- df[[param]]
+        if (is.null(col)) return(NA)
+        vals <- col[df$municipio == mun & !is.na(col)]
+        n    <- length(vals)
+        if (n < 2) return(NA)
+        if (!is.null(meta$min) && !is.na(meta$min)) {
+          pct_ok <- mean(vals >= meta$min) * 100
+        } else if (!is.null(meta$max) && !is.na(meta$max)) {
+          pct_ok <- mean(vals <= meta$max) * 100
+        } else {
+          return(NA)
+        }
+        pct_ok
+      }
+
+      cor_semaforo <- function(pct_ok) {
+        if (is.na(pct_ok)) return("#e0e0e0")
+        if (pct_ok >= 75)  return("#27ae60")   # verde
+        if (pct_ok >= 50)  return("#f39c12")   # amarelo
+        return("#e74c3c")                        # vermelho
+      }
+
+      icone_semaforo <- function(pct_ok) {
+        if (is.na(pct_ok)) return("\u2014")
+        if (pct_ok >= 75)  return("\u2705")
+        if (pct_ok >= 50)  return("\u26a0\ufe0f")
+        return("\u274c")
+      }
+
+      # Nomes curtos dos parâmetros para o header
+      nomes_curtos <- c(ph="pH",mo="M.O.",p="P",k="K",
+                        ca="Ca",al="Al\u00b3\u207a",v_pct="V%",m_pct="m%")
+
+      # Gera tabela visual (heatmap de semáforo)
+      header_cells <- lapply(params, function(p) {
+        tags$th(style="text-align:center;font-size:11px;padding:6px 10px;",
+                HTML(nomes_curtos[p]))
+      })
+
+      linhas_tab <- lapply(municipios, function(mun) {
+        celulas <- lapply(params, function(p) {
+          pct <- classificar_mun_param(mun, p)
+          cor <- cor_semaforo(pct)
+          ico <- icone_semaforo(pct)
+          lbl <- if (is.na(pct)) "\u2014" else paste0(round(pct), "%")
+          title_txt <- if (is.na(pct)) "Sem dados ou meta n\u00e3o definida"
+                       else paste0(round(pct,1), "% dentro da meta")
+          tags$td(
+            style = paste0("text-align:center;padding:5px 8px;",
+                           "background:", cor, "22;",
+                           "border-radius:6px;font-size:12px;"),
+            title = title_txt,
+            HTML(paste0(ico, "<br><span style='font-size:10px;color:#555;'>", lbl, "</span>"))
+          )
+        })
+        tags$tr(
+          tags$td(style="padding:5px 12px;font-weight:600;font-size:12px;white-space:nowrap;",
+                  mun),
+          celulas
+        )
+      })
+
+      div(class = "result-card",
+        div(class = "result-card-title",
+          HTML('<i class="bi bi-traffic-light"></i> Sem\u00e1foro Regional \u2014 % de amostras dentro da meta')),
+        p(style="font-size:11.5px;color:#666;margin-bottom:10px;",
+          HTML('<i class="bi bi-info-circle"></i> ',
+               '\u2705 &ge; 75% &nbsp; \u26a0\ufe0f 50\u201374% &nbsp; \u274c &lt; 50% &nbsp; \u2014 sem dados / meta n\u00e3o definida')),
+        div(style="overflow-x:auto;",
+          tags$table(
+            style="border-collapse:separate;border-spacing:4px;width:100%;",
+            tags$thead(
+              tags$tr(
+                tags$th(style="padding:6px 12px;font-size:12px;", "Munic\u00edpio"),
+                header_cells
+              )
+            ),
+            tags$tbody(linhas_tab)
+          )
+        )
+      )
+    })
+  })
+
+  # --------------------------------------------------------------------------
+  # CRUZAMENTO CLIMA × FERTILIDADE
+  # --------------------------------------------------------------------------
+  rv_clima_banco <- reactiveVal(NULL)
+
+  observeEvent(input$btn_cruzar_clima, {
+    df <- rv_regional_df()
+    req(df)
+    coords <- extrair_coords_municipios(df)
+    if (is.null(coords) || nrow(coords) == 0) {
+      showNotification(
+        "Nenhuma coordenada encontrada no banco. Preencha Latitude e Longitude na planilha.",
+        type = "error", duration = 6
+      )
+      return()
+    }
+
+    fim    <- Sys.Date() - 1
+    inicio <- fim - 365
+
+    withProgress(message = "Buscando dados clim\u00e1ticos dos munic\u00edpios...",
+                  detail = paste0("0/", nrow(coords), " munic\u00edpios"), {
+
+      resultados <- lapply(seq_len(nrow(coords)), function(i) {
+        incProgress(1/nrow(coords),
+          detail = paste0(i, "/", nrow(coords), " — ", coords$municipio[i]))
+        tryCatch({
+          res <- buscar_clima_municipio(
+            lat    = coords$latitude[i],
+            lon    = coords$longitude[i],
+            inicio = format(inicio, "%Y-%m-%d"),
+            fim    = format(fim, "%Y-%m-%d"),
+            variaveis = c("precipitation_sum","temperature_2m_max",
+                          "temperature_2m_min","et0_fao_evapotranspiration")
+          )
+          if (!is.null(res$erro)) return(NULL)
+          d <- res$dados
+          # Agrega para totais/médias anuais
+          chuva_total  <- if ("chuva_mm"    %in% names(d)) sum(d$chuva_mm, na.rm=TRUE) else NA
+          temp_media   <- if ("temp_media_c"%in% names(d)) mean(d$temp_media_c, na.rm=TRUE) else NA
+          et0_total    <- if ("et0_mm"      %in% names(d)) sum(d$et0_mm, na.rm=TRUE) else NA
+          balanco      <- if (!is.na(chuva_total) && !is.na(et0_total))
+                            chuva_total - et0_total else NA
+          data.frame(
+            municipio           = coords$municipio[i],
+            chuva_mm            = round(chuva_total, 1),
+            temp_media_c        = round(temp_media, 2),
+            et0_mm              = round(et0_total, 1),
+            balanco_hidrico_mm  = round(balanco, 1),
+            stringsAsFactors    = FALSE
+          )
+        }, error = function(e) NULL)
+      })
+
+      df_clima_mun <- do.call(rbind, Filter(Negate(is.null), resultados))
+      rv_clima_banco(df_clima_mun)
+    })
+  })
+
+  output$regional_clima_cruzamento <- renderUI({
+    df_reg   <- rv_regional_df()
+    df_clima <- rv_clima_banco()
+    if (is.null(df_reg) || is.null(df_clima)) return(NULL)
+
+    atrib   <- input$clima_banco_atrib
+    var_cli <- input$clima_banco_var
+
+    # Calcula médias do atributo por município e junta com clima
+    medias_solo <- tapply(df_reg[[atrib]], df_reg$municipio,
+                           function(x) mean(x, na.rm=TRUE))
+    df_join <- merge(
+      data.frame(municipio=names(medias_solo),
+                 valor_solo=round(unname(medias_solo), 3),
+                 stringsAsFactors=FALSE),
+      df_clima, by="municipio"
+    )
+    df_join <- df_join[!is.na(df_join$valor_solo) & !is.na(df_join[[var_cli]]), ]
+
+    if (nrow(df_join) < 3) {
+      return(div(class="result-card",
+        div(class="result-card-title",
+          HTML('<i class="bi bi-graph-up-arrow"></i> Clima \u00d7 Fertilidade')),
+        div(style="color:#e67e22;font-size:12px;padding:12px;",
+          HTML('<i class="bi bi-exclamation-triangle-fill"></i> Munic\u00edpios com dados clim\u00e1ticos insuficientes (m\u00ednimo 3).'))
+      ))
+    }
+
+    r_corr  <- round(cor(df_join[[var_cli]], df_join$valor_solo, method="pearson"), 3)
+    r_class <- if (abs(r_corr) >= 0.7) "forte" else if (abs(r_corr) >= 0.4) "moderada" else "fraca"
+    r_dir   <- if (r_corr > 0) "positiva" else "negativa"
+
+    nome_solo <- nomes_atributos_regional[[atrib]] %||% atrib
+    nome_cli  <- c(chuva_mm="Chuva total anual (mm)",
+                   temp_media_c="Temperatura m\u00e9dia anual (\u00b0C)",
+                   et0_mm="ET\u2080 total anual (mm)",
+                   balanco_hidrico_mm="Balan\u00e7o h\u00eddrico anual (mm)")[var_cli]
+
+    g <- plot_ly(df_join,
+        x    = ~get(var_cli),
+        y    = ~valor_solo,
+        text = ~municipio,
+        type = "scatter", mode = "markers+text",
+        textposition = "top center",
+        marker = list(size = 14, color = "#1A5276",
+                      line = list(color="white", width=1.5)),
+        hovertemplate = paste0(
+          "<b>%{text}</b><br>",
+          nome_cli, ": %{x:.1f}<br>",
+          nome_solo, ": %{y:.3f}<extra></extra>"
+        )
+      ) %>%
+      add_trace(
+        x    = ~get(var_cli),
+        y    = ~fitted(lm(valor_solo ~ get(var_cli), data=df_join)),
+        type = "scatter", mode = "lines",
+        name = "Linha de tend\u00eancia",
+        line = list(color="#C0392B", width=2, dash="dot"),
+        hoverinfo = "skip", showlegend=FALSE
+      ) %>%
+      layout(
+        xaxis  = list(title=nome_cli, gridcolor="#eee"),
+        yaxis  = list(title=nome_solo, gridcolor="#eee"),
+        paper_bgcolor="transparent", plot_bgcolor="transparent",
+        margin=list(t=10)
+      )
+
+    div(class="result-card",
+      div(class="result-card-title",
+        HTML(paste0('<i class="bi bi-graph-up-arrow"></i> Clima \u00d7 Fertilidade \u2014 ',
+                     nome_cli, ' \u00d7 ', nome_solo))),
+      withSpinner(plotlyOutput("regional_clima_scatter", height="380px"),
+                  type=8, color="#1A5276"),
+      div(style=paste0("background:", if(abs(r_corr)>=0.4) "#eafaf1" else "#fff8e1",
+                       ";border-left:3px solid ", if(abs(r_corr)>=0.4) "#27ae60" else "#f39c12",
+                       ";padding:10px 14px;border-radius:4px;margin-top:10px;font-size:12px;"),
+        HTML(paste0(
+          '<b>r de Pearson = ', r_corr, '</b> \u2014 correla\u00e7\u00e3o ',
+          r_class, ' e ', r_dir, ' entre ',
+          nome_cli, ' e ', nome_solo, ' nos ', nrow(df_join), ' munic\u00edpios. ',
+          if (abs(r_corr) >= 0.4)
+            'Associa\u00e7\u00e3o clim\u00e1tica relevante \u2014 considere o regime pluviom\u00e9trico na interpreta\u00e7\u00e3o da fertilidade.'
+          else
+            'Correla\u00e7\u00e3o fraca \u2014 outros fatores (material de origem, manejo) dominam a varia\u00e7\u00e3o deste atributo.'
+        ))
+      ),
+      div(style="margin-top:12px;",
+        div(class="result-card-title",
+          HTML('<i class="bi bi-table"></i> Dados por Munic\u00edpio')),
+        datatable(
+          setNames(
+            df_join[, c("municipio","valor_solo",var_cli), drop=FALSE],
+            c("Munic\u00edpio", nome_solo, nome_cli)
+          ),
+          rownames=FALSE, selection="none", class="stripe hover compact",
+          options=list(pageLength=10, dom="tip",
+            language=list(paginate=list(previous="Anterior","next"="Pr\u00f3ximo")))
+        )
+      )
+    )
+  })
+
+  output$regional_clima_scatter <- renderPlotly({
+    df_reg   <- rv_regional_df()
+    df_clima <- rv_clima_banco()
+    if (is.null(df_reg) || is.null(df_clima)) return(plotly_vazio("Busque os dados clim\u00e1ticos acima"))
+    atrib   <- input$clima_banco_atrib
+    var_cli <- input$clima_banco_var
+    medias_solo <- tapply(df_reg[[atrib]], df_reg$municipio, function(x) mean(x, na.rm=TRUE))
+    df_join <- merge(
+      data.frame(municipio=names(medias_solo), valor_solo=round(unname(medias_solo),3),
+                 stringsAsFactors=FALSE),
+      df_clima, by="municipio"
+    )
+    df_join <- df_join[!is.na(df_join$valor_solo) & !is.na(df_join[[var_cli]]), ]
+    if (nrow(df_join) < 2) return(plotly_vazio("Dados insuficientes para gr\u00e1fico"))
+    nome_cli  <- c(chuva_mm="Chuva (mm)",temp_media_c="Temp (\u00b0C)",
+                   et0_mm="ET\u2080 (mm)",balanco_hidrico_mm="Balan\u00e7o (mm)")[var_cli]
+    nome_solo <- nomes_atributos_regional[[atrib]] %||% atrib
+    plot_ly(df_join, x=~get(var_cli), y=~valor_solo, text=~municipio,
+        type="scatter", mode="markers+text", textposition="top center",
+        marker=list(size=14, color="#1A5276",
+                    line=list(color="white", width=1.5)),
+        hovertemplate=paste0("<b>%{text}</b><br>",nome_cli,": %{x:.1f}<br>",
+                              nome_solo,": %{y:.3f}<extra></extra>")
+      ) %>%
+      add_trace(x=~get(var_cli),
+        y=~fitted(lm(valor_solo ~ get(var_cli), data=df_join)),
+        type="scatter", mode="lines",
+        line=list(color="#C0392B", width=2, dash="dot"),
+        hoverinfo="skip", showlegend=FALSE
+      ) %>%
+      layout(xaxis=list(title=nome_cli,gridcolor="#eee"),
+             yaxis=list(title=nome_solo,gridcolor="#eee"),
+             paper_bgcolor="transparent",plot_bgcolor="transparent",
+             margin=list(t=10))
+  })
+
+  # --------------------------------------------------------------------------
   # SUB-ABA PESQUISA > ANÁLISES ESTATÍSTICAS
   # --------------------------------------------------------------------------
 
@@ -1740,6 +2765,18 @@ server <- function(input, output, session) {
 
   pesq_df_fonte <- reactive({
     if (!is.null(rv_regional_df())) "regional" else "proprio"
+  })
+
+  # Dataframe filtrado por cultura (usado em todas as análises)
+  pesq_df_filtrado <- reactive({
+    df <- pesq_df_ativo()
+    if (is.null(df)) return(NULL)
+    filtro <- input$pesq_filtro_cultura %||% "Todas"
+    if (!is.null(filtro) && filtro != "Todas" &&
+        "cultura" %in% names(df) && nchar(filtro) > 0) {
+      df <- df[!is.na(df$cultura) & df$cultura == filtro, ]
+    }
+    df
   })
 
   # --- Conteúdo principal da sub-aba (UI dinâmica) ---
@@ -1790,19 +2827,41 @@ server <- function(input, output, session) {
         ))
       ),
 
-      # Seletor de tipo de análise
+      # Seletor de tipo de análise + filtro de cultura
       div(class = "result-card",
         div(class = "result-card-title",
           HTML('<i class="bi bi-list-check"></i> Tipo de An\u00e1lise')),
+
+        # Filtro de cultura (só aparece se houver coluna "cultura" com >1 valor)
+        if ("cultura" %in% names(df) && length(unique(stats::na.omit(df$cultura))) > 1) {
+          div(class = "form-group-custom", style = "margin-bottom:10px;",
+            label_custom("Filtrar por cultura", "bi-flower1"),
+            selectInput("pesq_filtro_cultura", NULL, width = "100%",
+              choices = c("Todas as culturas" = "Todas",
+                          setNames(sort(unique(stats::na.omit(df$cultura))),
+                                   sort(unique(stats::na.omit(df$cultura))))),
+              selected = "Todas"
+            )
+          )
+        },
+
         selectInput("pesq_tipo_analise", NULL, width = "100%",
           choices = c(
+            "── Descritiva ──────────────────" = "header_descritiva",
+            "Estat\u00edstica Descritiva + Normalidade" = "descritiva",
+            "── Explorat\u00f3ria ────────────────" = "header_exploratoria",
             "Matriz de Correla\u00e7\u00e3o"              = "correlacao",
             "Dispers\u00e3o & Regress\u00e3o"             = "regressao",
             "Regress\u00e3o M\u00faltipla"                = "regressao_multipla",
             "An\u00e1lise de Trilha (Path Analysis)"      = "analise_trilha",
-            "ANOVA \u2014 Compara\u00e7\u00e3o de M\u00e9dias" = "anova",
+            "── Compara\u00e7\u00e3o de M\u00e9dias ─────" = "header_comp",
+            "ANOVA \u2014 Param\u00e9trica"               = "anova",
+            "Kruskal-Wallis \u2014 N\u00e3o-param\u00e9trico" = "kruskal",
+            "Mann-Whitney (2 grupos)"            = "mann_whitney",
+            "── Multivariada ───────────────" = "header_multi",
             "PCA \u2014 Componentes Principais"          = "pca",
             "Cluster \u2014 Tipologia de Solos"          = "cluster",
+            "── Limiares Cr\u00edticos ──────────" = "header_limiares",
             "Limiar Cr\u00edtico \u2014 Cate-Nelson"      = "cate_nelson",
             "Limiar Cr\u00edtico \u2014 Linear-Plat\u00f4" = "linear_plato"
           )
@@ -1817,7 +2876,7 @@ server <- function(input, output, session) {
 
   # --- Inputs dinâmicos por tipo de análise ---
   output$pesq_estat_inputs_dinamicos <- renderUI({
-    df <- pesq_df_ativo()
+    df <- pesq_df_filtrado()
     if (is.null(df) || is.null(input$pesq_tipo_analise)) return(NULL)
 
     atrib_choices <- atributos_numericos_disponiveis(df)
@@ -1833,6 +2892,78 @@ server <- function(input, output, session) {
     )
 
     switch(input$pesq_tipo_analise,
+
+      # Headers de separação (retornam NULL — apenas visuais no selectInput)
+      "header_descritiva"   = NULL,
+      "header_exploratoria" = NULL,
+      "header_comp"         = NULL,
+      "header_multi"        = NULL,
+      "header_limiares"     = NULL,
+
+      "descritiva" = tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Vari\u00e1veis a analisar", "bi-bar-chart"),
+            selectizeInput("pesq_desc_vars", NULL, choices = atrib_choices,
+              selected = head(default_multi, 5), multiple = TRUE, width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Agrupar por (opcional)", "bi-collection"),
+            selectInput("pesq_desc_grupo", NULL, width = "100%",
+              choices = c("Nenhum" = "Nenhum", grupo_choices))
+          )
+        ),
+        p(style = "font-size:11.5px; color:#888; margin-top:-4px;",
+          HTML('<i class="bi bi-info-circle"></i> Gera: n, m\u00e9dia, mediana, DP, CV%, ',
+               'assimetria, curtose, outliers (Tukey/IQR), teste de normalidade ',
+               '(Shapiro-Wilk ou KS) e gr\u00e1ficos interativos (histograma + boxplot + Q-Q).')),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica",
+            HTML('<i class="bi bi-play-fill"></i>&nbsp; GERAR RELAT\u00d3RIO DESCRITIVO'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "kruskal" = tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Atributo (Y)", "bi-thermometer-half"),
+            selectInput("pesq_kw_y", NULL, choices = atrib_choices, width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Fator de grupo", "bi-collection"),
+            selectInput("pesq_kw_grupo", NULL, choices = grupo_choices, width = "100%")
+          )
+        ),
+        p(style = "font-size:11.5px; color:#888; margin-top:-4px;",
+          HTML('<i class="bi bi-info-circle"></i> Alternativa n\u00e3o-param\u00e9trica \u00e0 ANOVA. ',
+               'Compara medianas de 3+ grupos sem exigir normalidade. ',
+               'P\u00f3s-hoc: teste de Dunn com corre\u00e7\u00e3o de Bonferroni.')),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica",
+            HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
+
+      "mann_whitney" = tagList(
+        div(class = "form-row-2",
+          div(class = "form-group-custom",
+            label_custom("Atributo (Y)", "bi-thermometer-half"),
+            selectInput("pesq_mw_y", NULL, choices = atrib_choices, width = "100%")
+          ),
+          div(class = "form-group-custom",
+            label_custom("Fator de grupo (exatamente 2 n\u00edveis)", "bi-diagram-2"),
+            selectInput("pesq_mw_grupo", NULL, choices = grupo_choices, width = "100%")
+          )
+        ),
+        p(style = "font-size:11.5px; color:#888; margin-top:-4px;",
+          HTML('<i class="bi bi-info-circle"></i> Alternativa n\u00e3o-param\u00e9trica ao teste t ',
+               'para 2 amostras independentes. Compara medianas sem exigir normalidade. ',
+               'Inclui estimativa de Hodges-Lehmann para a diferen\u00e7a de localiza\u00e7\u00e3o.')),
+        div(class = "btn-container",
+          actionButton("btn_rodar_estatistica",
+            HTML('<i class="bi bi-play-fill"></i>&nbsp; CALCULAR'),
+            class = "btn-calcular", width = "100%"))
+      ),
 
       "correlacao" = tagList(
         div(class = "form-row-2",
@@ -2033,11 +3164,310 @@ server <- function(input, output, session) {
   observeEvent(input$pesq_tipo_analise, { pesq_clicado(FALSE) }, ignoreInit = TRUE)
 
   pesq_resultado_calc <- eventReactive(input$btn_rodar_estatistica, {
-    df <- pesq_df_ativo()
+    df <- pesq_df_filtrado()
     tipo <- input$pesq_tipo_analise
     if (is.null(df) || is.null(tipo)) return(list(ui = NULL, plot = NULL))
 
+    if (nrow(df) < 3) return(list(
+      ui = div(class = "stat-erro",
+        HTML('<i class="bi bi-exclamation-triangle-fill"></i> Dados insuficientes ap\u00f3s filtro de cultura (n &lt; 3). Selecione "Todas as culturas" ou uma cultura com mais amostras.')),
+      plot = NULL
+    ))
+
     switch(tipo,
+
+      # Headers — não calculam nada
+      "header_descritiva"   = list(ui = NULL, plot = NULL),
+      "header_exploratoria" = list(ui = NULL, plot = NULL),
+      "header_comp"         = list(ui = NULL, plot = NULL),
+      "header_multi"        = list(ui = NULL, plot = NULL),
+      "header_limiares"     = list(ui = NULL, plot = NULL),
+
+      # ── ESTATÍSTICA DESCRITIVA ──────────────────────────────────────────────
+      "descritiva" = {
+        vars  <- input$pesq_desc_vars
+        grupo <- input$pesq_desc_grupo %||% "Nenhum"
+
+        if (length(vars) == 0) return(list(
+          ui = div(class="stat-erro", HTML('<i class="bi bi-exclamation-triangle-fill"></i> Selecione ao menos uma variável.')),
+          plot = NULL))
+
+        res <- calc_descritiva(df, vars, grupo)
+        if (!is.null(res$erro)) return(list(
+          ui = div(class="stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        nomes <- nomes_atributos_regional
+
+        # Monta cards por variável/grupo
+        cards <- lapply(res$resultados, function(r) {
+          nome_var <- nomes[[r$variavel]] %||% r$variavel
+          titulo   <- if (r$grupo == "Todos") nome_var
+                      else paste0(nome_var, " — ", r$grupo)
+
+          # Cor do badge de normalidade
+          if (is.na(r$normalidade$normal)) {
+            badge_cls <- "pesq-badge pesq-badge-warn"; badge_txt <- "N/D"
+          } else if (r$normalidade$normal) {
+            badge_cls <- "pesq-badge pesq-badge-ok"; badge_txt <- "Normal"
+          } else {
+            badge_cls <- "pesq-badge pesq-badge-info"; badge_txt <- "N\u00e3o normal"
+          }
+
+          # Alerta de outliers
+          alerta_out <- if (r$n_outliers > 0) {
+            div(style = "background:#fff8e1; border-left:3px solid #ffc107; padding:8px 12px; border-radius:4px; margin-top:8px; font-size:11.5px; color:#6d4c00;",
+              HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> <b>',
+                r$n_outliers, ' outlier(s)</b> detectado(s) pelo m\u00e9todo de Tukey (IQR). ',
+                'Limite: [', r$lim_inf_outlier, ', ', r$lim_sup_outlier, ']. ',
+                'Valores: ', paste(round(r$outliers, 3), collapse=", ")))
+            )
+          } else NULL
+
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-card-list"></i> ', titulo)),
+              span(class = badge_cls, HTML(badge_txt))
+            ),
+            # Tabela de medidas
+            tags$table(class = "pesq-trat-table", style = "margin-bottom:8px;",
+              tags$thead(tags$tr(
+                tags$th("Medida"), tags$th("Valor"),
+                tags$th("Medida"), tags$th("Valor")
+              )),
+              tags$tbody(
+                tags$tr(
+                  tags$td("n"), tags$td(r$n),
+                  tags$td("M\u00e9dia"), tags$td(r$media)
+                ),
+                tags$tr(
+                  tags$td("Mediana"), tags$td(r$mediana),
+                  tags$td("Moda"), tags$td(if(is.na(r$moda)) "—" else r$moda)
+                ),
+                tags$tr(
+                  tags$td("M\u00ednimo"), tags$td(r$minimo),
+                  tags$td("M\u00e1ximo"), tags$td(r$maximo)
+                ),
+                tags$tr(
+                  tags$td("Amplitude"), tags$td(r$amplitude),
+                  tags$td("IQR (Q3-Q1)"), tags$td(r$iqr)
+                ),
+                tags$tr(
+                  tags$td("Q1 (P25)"), tags$td(r$q1),
+                  tags$td("Q3 (P75)"), tags$td(r$q3)
+                ),
+                tags$tr(
+                  tags$td("P10"), tags$td(r$p10),
+                  tags$td("P90"), tags$td(r$p90)
+                ),
+                tags$tr(
+                  tags$td("Desvio padr\u00e3o"), tags$td(r$dp),
+                  tags$td("Vari\u00e2ncia"), tags$td(r$variancia)
+                ),
+                tags$tr(
+                  tags$td("CV%"), tags$td(paste0(r$cv_pct, "% — ", r$cv_class)),
+                  tags$td("Outliers"), tags$td(r$n_outliers)
+                ),
+                tags$tr(
+                  tags$td("Assimetria"), tags$td(r$assimetria),
+                  tags$td("Curtose"), tags$td(r$curtose)
+                ),
+                tags$tr(
+                  tags$td(paste0("Normalidade (", r$normalidade$teste, ")")),
+                  tags$td(paste0("W/D = ", r$normalidade$estatistica, ", p = ", r$normalidade$p)),
+                  tags$td("Diagn\u00f3stico"),
+                  tags$td(HTML(if(isTRUE(r$normalidade$normal))
+                    '<span style="color:#27ae60;font-weight:600;">Normal ✓</span>'
+                    else '<span style="color:#e74c3c;font-weight:600;">N\u00e3o normal ✗</span>'))
+                )
+              )
+            ),
+            div(class = "stat-interpretacao",
+              HTML(paste0('<i class="bi bi-lightbulb"></i> ', r$normalidade$interpretacao))
+            ),
+            alerta_out
+          )
+        })
+
+        # Gráfico: histograma da primeira variável selecionada
+        r1    <- res$resultados[[1]]
+        x_plt <- r1$x_vals
+        nome1 <- nomes[[r1$variavel]] %||% r1$variavel
+
+        hist_plot <- plot_ly(x = x_plt, type = "histogram",
+            marker = list(color = "#2D6A4F", line = list(color="white", width=0.5)),
+            name = "Frequ\u00eancia",
+            hovertemplate = "Valor: %{x}<br>Freq: %{y}<extra></extra>"
+          ) %>%
+          layout(
+            xaxis = list(title = nome1, gridcolor = "#eee"),
+            yaxis = list(title = "Frequ\u00eancia", gridcolor = "#eee"),
+            paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+            margin = list(t = 10)
+          )
+
+        # Q-Q plot
+        q_emp  <- sort(x_plt)
+        q_teo  <- qnorm(ppoints(length(x_plt)))
+        qq_plot <- plot_ly(x = q_teo, y = q_emp, type = "scatter", mode = "markers",
+            marker = list(color = "#1A5276", size = 7, opacity = 0.7),
+            name = "Q-Q",
+            hovertemplate = "Te\u00f3rico: %{x:.3f}<br>Emp\u00edrico: %{y:.3f}<extra></extra>"
+          ) %>%
+          add_trace(
+            x = range(q_teo), y = range(q_teo),
+            type = "scatter", mode = "lines",
+            line = list(color = "#e74c3c", dash = "dot", width = 1.5),
+            name = "Normal", showlegend = FALSE, hoverinfo = "skip"
+          ) %>%
+          layout(
+            xaxis = list(title = "Quantis te\u00f3ricos (Normal)", gridcolor = "#eee"),
+            yaxis = list(title = paste0("Quantis emp\u00edricos (", nome1, ")"), gridcolor = "#eee"),
+            paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+            margin = list(t = 10)
+          )
+
+        combo <- subplot(hist_plot, qq_plot, nrows = 1, margin = 0.08,
+                          titleX = TRUE, titleY = TRUE) %>%
+          layout(showlegend = FALSE)
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-graph-up"></i> Histograma + Q-Q Plot \u2014 ',
+                           nome1, ' <span class="stat-badge-n">n = ', r1$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_descritiva", height = "380px"), type = 8, color = "#2D6A4F")
+          ),
+          cards
+        )
+        list(ui = ui_out, plot = combo)
+      },
+
+      # ── KRUSKAL-WALLIS ──────────────────────────────────────────────────────
+      "kruskal" = {
+        atributo <- input$pesq_kw_y
+        grupo    <- input$pesq_kw_grupo
+        res <- calc_kruskal(df, atributo, grupo)
+        if (!is.null(res$erro)) return(list(
+          ui = div(class="stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        nome_a <- nomes_atributos_regional[[atributo]] %||% atributo
+
+        # Boxplot por grupo
+        d_plot <- df[!is.na(df[[atributo]]) & !is.na(df[[grupo]]), ]
+        boxplot <- plot_ly(d_plot, x = ~get(grupo), y = ~get(atributo),
+            type = "box", boxpoints = "outliers",
+            marker = list(color = "#1A5276"), fillcolor = "rgba(44,44,122,0.15)",
+            line = list(color = "#2c2c7a"),
+            hovertemplate = "%{x}<br>Mediana: %{median:.3f}<extra></extra>"
+          ) %>%
+          layout(
+            xaxis = list(title = grupo),
+            yaxis = list(title = nome_a, gridcolor = "#eee"),
+            paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+            margin = list(t = 10), showlegend = FALSE
+          )
+
+        interp <- interpretar_kruskal(res, nome_a, grupo)
+
+        # Tabela de medianas
+        med_df <- data.frame(
+          Grupo = names(res$medianas),
+          n = as.integer(res$ns[names(res$medianas)]),
+          Mediana = unname(res$medianas),
+          stringsAsFactors = FALSE
+        )
+        names(med_df)[1] <- grupo
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-bar-chart-steps"></i> Kruskal-Wallis \u2014 ',
+                nome_a, ' por ', grupo,
+                '<span class="stat-badge-n">n = ', res$n, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_kruskal", height = "380px"), type = 8, color = "#2c2c7a"),
+            div(class = "stat-interpretacao", HTML(interp))
+          ),
+          div(class = "result-card",
+            div(class = "result-card-title", HTML('<i class="bi bi-table"></i> Medianas por Grupo')),
+            datatable(med_df, rownames = FALSE, selection = "none",
+              class = "stripe hover compact",
+              options = list(pageLength = 15, dom = "tip",
+                language = list(paginate = list(previous="Anterior", "next"="Pr\u00f3ximo"))))
+          ),
+          if (!is.null(res$dunn) && nrow(res$dunn) > 0) {
+            dunn_show <- res$dunn
+            dunn_show$significativo <- ifelse(dunn_show$significativo, "\u2705 Sim", "\u274c N\u00e3o")
+            names(dunn_show) <- c("Grupo 1", "Grupo 2", "Z", "p (bruto)", "p (Bonferroni)", "Significativo")
+            div(class = "result-card",
+              div(class = "result-card-title",
+                HTML('<i class="bi bi-grid-3x3"></i> P\u00f3s-hoc Dunn (Bonferroni)')),
+              datatable(dunn_show, rownames = FALSE, selection = "none",
+                class = "stripe hover compact",
+                options = list(pageLength = 20, dom = "tip",
+                  language = list(paginate = list(previous="Anterior", "next"="Pr\u00f3ximo"))))
+            )
+          }
+        )
+        list(ui = ui_out, plot = boxplot)
+      },
+
+      # ── MANN-WHITNEY ────────────────────────────────────────────────────────
+      "mann_whitney" = {
+        atributo <- input$pesq_mw_y
+        grupo    <- input$pesq_mw_grupo
+        res <- calc_mann_whitney(df, atributo, grupo)
+        if (!is.null(res$erro)) return(list(
+          ui = div(class="stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
+          plot = NULL))
+
+        nome_a <- nomes_atributos_regional[[atributo]] %||% atributo
+
+        d_plot <- df[!is.na(df[[atributo]]) & !is.na(df[[grupo]]), ]
+        d_plot <- d_plot[d_plot[[grupo]] %in% c(res$grupo1, res$grupo2), ]
+
+        boxplot <- plot_ly(d_plot, x = ~get(grupo), y = ~get(atributo),
+            type = "box", boxpoints = "all", jitter = 0.3,
+            marker = list(color = "#6C3483", size = 5, opacity = 0.5),
+            fillcolor = "rgba(108,52,131,0.12)",
+            line = list(color = "#6C3483"),
+            hovertemplate = "%{x}<br>%{y:.3f}<extra></extra>"
+          ) %>%
+          layout(
+            xaxis = list(title = grupo),
+            yaxis = list(title = nome_a, gridcolor = "#eee"),
+            paper_bgcolor = "transparent", plot_bgcolor = "transparent",
+            margin = list(t = 10), showlegend = FALSE
+          )
+
+        interp <- interpretar_mann_whitney(res, nome_a)
+
+        resumo_df <- data.frame(
+          Grupo = c(res$grupo1, res$grupo2),
+          n = c(res$n1, res$n2),
+          Mediana = c(res$mediana1, res$mediana2),
+          stringsAsFactors = FALSE
+        )
+        names(resumo_df)[1] <- grupo
+
+        ui_out <- tagList(
+          div(class = "result-card",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-distribute-vertical"></i> Mann-Whitney \u2014 ',
+                nome_a, ' por ', grupo))),
+            withSpinner(plotlyOutput("pesq_plot_mann_whitney", height = "360px"), type = 8, color = "#6C3483"),
+            div(class = "stat-interpretacao", HTML(interp))
+          ),
+          div(class = "result-card",
+            div(class = "result-card-title", HTML('<i class="bi bi-table"></i> Resumo por Grupo')),
+            datatable(resumo_df, rownames = FALSE, selection = "none",
+              class = "stripe hover compact",
+              options = list(pageLength = 5, dom = "t"))
+          )
+        )
+        list(ui = ui_out, plot = boxplot)
+      },
 
       "correlacao" = {
         vars <- input$pesq_corr_vars
@@ -2338,60 +3768,125 @@ server <- function(input, output, session) {
           ui = div(class = "stat-erro", HTML(paste0('<i class="bi bi-exclamation-triangle-fill"></i> ', res$erro))),
           plot = NULL))
 
-        nome_y <- nomes_atributos_regional[[atributo]]
-        nomes_grupo_inv <- setNames(names(grupos_categoricos_disponiveis(df)),
-                                     grupos_categoricos_disponiveis(df))
-        nome_grupo <- if (!is.null(nomes_grupo_inv[[grupo]])) nomes_grupo_inv[[grupo]] else grupo
+        nome_y     <- nomes_atributos_regional[[atributo]] %||% atributo
+        nome_grupo <- grupo
 
-        boxplot <- plot_ly(res$dados, x = ~g, y = ~y, type = "box",
-          marker = list(color = "#2c2c7a"), line = list(color = "#2c2c7a"),
-          fillcolor = "rgba(44,44,122,0.15)"
-        ) %>% layout(
-          xaxis = list(title = nome_grupo, tickangle = -30, tickfont = list(size = 10)),
-          yaxis = list(title = nome_y, gridcolor = "#eee"),
+        # Cores por LETRA de agrupamento — grupos com a mesma letra = mesma cor
+        # Isso comunica visualmente quem difere de quem no pós-hoc
+        cores_letras <- c(
+          a = "#2D6A4F", b = "#1A5276", c = "#6C3483",
+          d = "#B7791F", e = "#922B21", f = "#0E6655",
+          g = "#4D5656", h = "#784212", i = "#154360",
+          j = "#512E5F", k = "#117A65", l = "#1F618D"
+        )
+        # A cor do grupo = cor da primeira letra de sua combinação (ex: "ab" → cor de "a")
+        cor_grupo <- function(grp) {
+          primeira <- substr(res$letras[[grp]], 1, 1)
+          unname(cores_letras[primeira] %||% "#888888")
+        }
+
+        # Boxplot colorido por grupo com letras anotadas
+        grupos_lvl <- levels(res$dados$g)
+        letras     <- res$letras
+
+        # Cria uma trace por grupo para ter legenda e cores individuais
+        traces <- lapply(grupos_lvl, function(grp) {
+          vals <- res$dados$y[res$dados$g == grp]
+          cor  <- cor_grupo(grp)
+          list(
+            y       = vals, type = "box", name = grp, boxpoints = "outliers",
+            marker  = list(color = cor),
+            fillcolor = paste0(cor, "33"),
+            line    = list(color = cor),
+            hovertemplate = paste0("<b>", grp, "</b><br>",
+              "Mediana: %{median:.3f}<br>M\u00e9dia: ", round(mean(vals), 3),
+              "<br>Letra: ", letras[[grp]], "<extra></extra>")
+          )
+        })
+
+        # Anotações das letras acima de cada boxplot
+        max_y <- max(res$dados$y, na.rm = TRUE)
+        range_y <- diff(range(res$dados$y, na.rm = TRUE))
+        anotacoes <- lapply(seq_along(grupos_lvl), function(i) {
+          grp <- grupos_lvl[i]
+          list(
+            x = grp, y = max_y + range_y * 0.06,
+            text = paste0("<b>", letras[[grp]], "</b>"),
+            showarrow = FALSE,
+            font = list(size = 14, color = cor_grupo(grp)),
+            xref = "x", yref = "y"
+          )
+        })
+
+        boxplot <- do.call(plot_ly, c(
+          list(x = NULL),
+          list(data = res$dados)
+        ))
+        for (tr in traces) {
+          boxplot <- add_trace(boxplot,
+            y = tr$y, type = tr$type, name = tr$name,
+            boxpoints = tr$boxpoints,
+            marker = tr$marker, fillcolor = tr$fillcolor,
+            line = tr$line, hovertemplate = tr$hovertemplate
+          )
+        }
+        boxplot <- boxplot %>% layout(
+          xaxis   = list(title = nome_grupo, tickangle = -30, tickfont = list(size = 10)),
+          yaxis   = list(title = nome_y, gridcolor = "#eee",
+                          range = list(min(res$dados$y, na.rm=TRUE) - range_y*0.05,
+                                       max_y + range_y * 0.14)),
+          annotations = anotacoes,
+          boxmode = "group",
+          showlegend = FALSE,
           paper_bgcolor = "transparent", plot_bgcolor = "transparent",
-          margin = list(t = 10)
+          margin = list(t = 20, b = 60)
         )
 
+        # Tabela de médias com letras
         tab_medias <- res$medias
-        names(tab_medias) <- c("Grupo","n","M\u00e9dia","Desvio Padr\u00e3o")
+        names(tab_medias) <- c("Grupo", "n", "M\u00e9dia", "Desvio Padr\u00e3o", "Letra", "M\u00e9dia \u00b1 Letra")
 
-        sig_txt <- if (nrow(res$tukey_sig) > 0) {
-          paste0(nrow(res$tukey_sig), " par(es) com diferen\u00e7a significativa (Tukey, p &lt; 0.05).")
-        } else "Nenhum par com diferen\u00e7a significativa no teste de Tukey."
+        metodo_txt <- if (res$metodo_posthoc == "Tukey") {
+          "Teste de Tukey (HSD, \u03b1 = 5%)"
+        } else {
+          "Teste de Scott-Knott (\u03b1 = 5%)"
+        }
 
         interp <- paste0(
-          "ANOVA: p ", if (res$p_global < 0.001) "&lt; 0.001" else paste0("= ", round(res$p_global, 4)),
+          "ANOVA: F(", res$gl_trat, ", ", res$gl_res, ") = ", res$f_val,
+          ", p ", if (res$p_global < 0.001) "&lt; 0.001" else paste0("= ", res$p_global),
           " (", res$k, " grupos, n = ", res$n, "). ",
           if (res$p_global < 0.05)
-            paste0("H\u00e1 diferen\u00e7a significativa entre os grupos para ", nome_y, ". ", sig_txt)
+            paste0("H\u00e1 diferen\u00e7a significativa entre os grupos para ", nome_y,
+                   ". P\u00f3s-hoc: <b>", metodo_txt, "</b>. ",
+                   "M\u00e9dias seguidas de mesma letra n\u00e3o diferem entre si.")
           else
-            paste0("N\u00e3o h\u00e1 diferen\u00e7a significativa entre os grupos para ", nome_y, ".")
+            paste0("N\u00e3o h\u00e1 diferen\u00e7a significativa entre os grupos (F n\u00e3o significativo).")
         )
 
         ui_out <- tagList(
           div(class = "result-card",
             div(class = "result-card-title",
               HTML(paste0('<i class="bi bi-bar-chart-line"></i> ', nome_y, ' por ', nome_grupo,
-                           '<span class="stat-badge-n">n = ', res$n, '</span>'))),
-            withSpinner(plotlyOutput("pesq_plot_anova", height = "420px"), type = 8, color = "#2c2c7a"),
+                           ' <span class="stat-badge-n">n = ', res$n, '</span>',
+                           ' &nbsp;<span class="pesq-badge pesq-badge-info" style="font-size:9px;">',
+                           res$metodo_posthoc, '</span>'))),
+            withSpinner(plotlyOutput("pesq_plot_anova", height = "440px"), type = 8, color = "#2c2c7a"),
             div(class = "stat-interpretacao", HTML(interp))
           ),
           div(class = "result-card",
-            div(class = "result-card-title", HTML('<i class="bi bi-table"></i> M\u00e9dias por Grupo')),
-            datatable(tab_medias, rownames = FALSE, selection = "none",
+            div(class = "result-card-title",
+              HTML(paste0('<i class="bi bi-table"></i> M\u00e9dias por Grupo \u2014 ', metodo_txt))),
+            p(style = "font-size:11.5px; color:#888; margin-bottom:8px;",
+              HTML('<i class="bi bi-info-circle"></i> M\u00e9dias seguidas da mesma letra n\u00e3o ',
+                   'diferem entre si ao n\u00edvel de 5% de probabilidade.')),
+            datatable(
+              tab_medias[, c("Grupo","n","M\u00e9dia","Desvio Padr\u00e3o","Letra")],
+              rownames = FALSE, selection = "none",
               class = "stripe hover compact",
-              options = list(pageLength = 10, dom = "tip",
+              options = list(pageLength = 20, dom = "tip",
                 language = list(paginate = list(previous="Anterior", "next"="Pr\u00f3ximo"))))
-          ),
-          if (nrow(res$tukey_sig) > 0)
-            div(class = "result-card",
-              div(class = "result-card-title", HTML('<i class="bi bi-asterisk"></i> Diferen\u00e7as Significativas (Tukey)')),
-              datatable(res$tukey_sig, rownames = FALSE, selection = "none",
-                class = "stripe hover compact",
-                options = list(pageLength = 10, dom = "tip",
-                  language = list(paginate = list(previous="Anterior", "next"="Pr\u00f3ximo"))))
-            )
+          )
         )
         list(ui = ui_out, plot = boxplot)
       },
@@ -2621,6 +4116,24 @@ server <- function(input, output, session) {
     if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico para esta an\u00e1lise"))
     res$plot
   })
+  output$pesq_plot_descritiva <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure e clique em Gerar Relat\u00f3rio"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico"))
+    res$plot
+  })
+  output$pesq_plot_kruskal <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico"))
+    res$plot
+  })
+  output$pesq_plot_mann_whitney <- renderPlotly({
+    if (!pesq_clicado()) return(plotly_vazio("Configure e clique em Calcular"))
+    res <- pesq_resultado_calc()
+    if (is.null(res$plot)) return(plotly_vazio("Sem gr\u00e1fico"))
+    res$plot
+  })
   output$pesq_plot_regressao <- renderPlotly({
     if (!pesq_clicado()) return(plotly_vazio("Configure os par\u00e2metros e clique em Calcular"))
     res <- pesq_resultado_calc()
@@ -2718,3 +4231,30 @@ plotly_vazio <- function(msg = "Sem dados") {
 
 # Operador null-coalesce
 `%||%` <- function(a, b) if (!is.null(a)) a else b
+
+# Converte classe agronômica em classe CSS para colorir os cards de métrica
+cls_metric <- function(classe) {
+  switch(trimws(tolower(gsub("[^a-z0-9 ]", "", classe))),
+    "muito baixo"        = "cl-muito-baixo",
+    "baixo"              = "cl-baixo",
+    "medio"              = "cl-medio",
+    "moderadamente acido"= "cl-medio",
+    "levemente acido"    = "cl-bom",
+    "alto"               = "cl-alto",
+    "muito alto toxico"  = "cl-muito-baixo",
+    "muito alto"         = "cl-alto",
+    "alcalino"           = "cl-alcalino",
+    "cl-bom"
+  )
+}
+
+# Card de métrica individual (usado na aba Solo, Clima e Banco Regional)
+mk_metric <- function(valor, unidade, nome, classe, cor) {
+  cls <- cls_metric(classe)
+  div(class = paste("metric-item", cls),
+    div(class = "metric-value", valor),
+    div(class = "metric-unit", HTML(unidade)),
+    div(class = "metric-name", HTML(nome)),
+    span(class = paste("metric-class", cls), classe)
+  )
+}

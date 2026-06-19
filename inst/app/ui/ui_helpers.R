@@ -304,34 +304,78 @@ estilos_css <- function() {
   }
 
   /* MÉTRICAS */
-  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  /* Em telas largas (painel direito >500px), permite 4 colunas */
+  @media (min-width: 1100px) {
+    .metrics-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (min-width: 900px) and (max-width: 1099px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  }
   .metric-item {
     background: white;
     border-radius: 10px;
-    padding: 12px 10px;
+    padding: 12px 8px;
     text-align: center;
     border: 2px solid transparent;
     transition: all 0.2s;
+    min-width: 0;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
   }
   .metric-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
   .metric-value {
     font-family: 'DM Serif Display', serif;
-    font-size: 22px;
+    font-size: 20px;
     font-weight: bold;
     line-height: 1.1;
     color: var(--cinza-1);
+    word-break: break-all;
+    max-width: 100%;
   }
-  .metric-unit { font-size: 10px; color: var(--cinza-5); margin-top: 1px; }
-  .metric-name { font-size: 11px; font-weight: 600; color: var(--cinza-4); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .metric-unit {
+    font-size: 9.5px;
+    color: var(--cinza-5);
+    margin-top: 2px;
+    line-height: 1.3;
+    max-width: 100%;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    text-align: center;
+    white-space: normal;
+  }
+  .metric-name {
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--cinza-4);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+    word-break: break-word;
+    text-align: center;
+    max-width: 100%;
+  }
   .metric-class {
     display: inline-block;
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 700;
-    padding: 2px 7px;
+    padding: 2px 6px;
     border-radius: 20px;
-    margin-top: 5px;
+    margin-top: 4px;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
+    word-break: break-word;
+    text-align: center;
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.3;
   }
 
   /* Cores de classe */
@@ -556,7 +600,31 @@ estilos_css <- function() {
     cursor: wait !important;
   }
 
-  /* BOTÃO SALVAR PREÇOS */
+  /* BOTÃO CADEADO — liberar módulos avançados */
+  .btn-unlock {
+    background: rgba(255,255,255,0.08) !important;
+    color: rgba(255,255,255,0.5) !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    border-radius: 8px !important;
+    width: 36px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  .btn-unlock:hover {
+    background: rgba(255,255,255,0.2) !important;
+    color: white !important;
+  }
+  .btn-unlock.desbloqueado {
+    background: rgba(82,183,136,0.3) !important;
+    color: #52B788 !important;
+    border-color: #52B788 !important;
+  }
   .btn-salvar-precos {
     background: rgba(255,255,255,0.15) !important;
     color: white !important;
@@ -875,8 +943,11 @@ js_tabs <- function() {
       'tab_financeiro':'painel_financeiro',
       'tab_graficos':  'painel_graficos',
       'tab_pesquisa':  'painel_pesquisa',
-      'tab_regional':  'painel_regional'
+      'tab_regional':  'painel_regional',
+      'tab_lote':      'painel_lote',
+      'tab_clima':     'painel_clima'
     };
+    if (!panelMap[id]) return;
     $('.tab-btn').removeClass('active-tab');
     btn.addClass('active-tab');
     $('.results-panel').removeClass('active-panel');

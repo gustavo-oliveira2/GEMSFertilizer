@@ -174,7 +174,7 @@ rec_milho <- function(p_nivel, k_nivel, produtividade = "media", fase = "plantio
     "alta"   = 120
   )
   # Desconto por MO alta
-  if (mo >= 3.0) { n_base <- n_base * 0.8; n_cobert <- n_cobert * 0.8 }
+  if (!is.na(mo) && mo >= 3.0) { n_base <- n_base * 0.8; n_cobert <- n_cobert * 0.8 }
   # Desconto por leguminosa anterior
   if (n_anterior == "leguminosa") { n_cobert <- n_cobert * 0.7 }
   
@@ -258,7 +258,7 @@ rec_arroz <- function(p_nivel, k_nivel, produtividade = "media", mo, tipo = "seq
   n_total <- switch(produtividade,
     "baixa"=60, "media"=80, "alta"=100
   )
-  if (mo >= 3.0) n_total <- n_total * 0.8
+  if (!is.na(mo) && mo >= 3.0) n_total <- n_total * 0.8
   
   p_rec <- switch(as.character(p_nivel),
     "1"=80, "2"=60, "3"=40, "4"=20, "5"=10
@@ -277,7 +277,7 @@ rec_arroz <- function(p_nivel, k_nivel, produtividade = "media", mo, tipo = "seq
 
 rec_mandioca <- function(p_nivel, k_nivel, mo) {
   n_dose <- 40
-  if (mo >= 3.0) n_dose <- 25
+  if (!is.na(mo) && mo >= 3.0) n_dose <- 25
   
   p_rec <- switch(as.character(p_nivel),
     "1"=80, "2"=60, "3"=40, "4"=20, "5"=10
@@ -314,7 +314,7 @@ rec_sorgo <- function(p_nivel, k_nivel, produtividade = "media", mo) {
   n_total <- switch(produtividade,
     "baixa"=50, "media"=70, "alta"=90
   )
-  if (mo >= 3.0) n_total <- n_total * 0.8
+  if (!is.na(mo) && mo >= 3.0) n_total <- n_total * 0.8
   
   p_rec <- switch(as.character(p_nivel),
     "1"=70, "2"=55, "3"=40, "4"=25, "5"=10
@@ -371,7 +371,7 @@ rec_abacaxi <- function(p_nivel, k_nivel, produtividade = "media", mo, fase = "p
     "media"  = 280,
     "alta"   = 350
   )
-  if (mo >= 3.0) n_total <- round(n_total * 0.85)
+  if (!is.na(mo) && mo >= 3.0) n_total <- round(n_total * 0.85)
   
   # Plantio: ~10% do N (arranque); cobertura: 90%
   n_plantio   <- round(n_total * 0.10)

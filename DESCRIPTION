@@ -1,23 +1,67 @@
 Package: GEMSFertilizer
 Title: Sistema de Recomendacao de Adubacao e Calagem para Culturas Agricolas
-Version: 0.2.0
-Date: 2025-01-01
+Version: 0.5.0
+Date: 2026-06-18
 Authors@R: 
     person(
       given   = "GEMS",
       family  = "Research Group",
       role    = c("aut", "cre"),
-      email   = "contato@gems.agro.br",
+      email   = "gustavooliveira@academico.ufs.br",
       comment = c(ORCID = "")
     )
 Description: 
     Aplicativo Shiny interativo para recomendacao de adubacao mineral (N, P2O5, K2O),
-    calagem e gessagem de culturas agricolas. Baseado no Manual de Adubacao e Calagem
-    para Minas Gerais - 5a Aproximacao (2023) e no Manual de Recomendacoes de Adubacao
-    e Calagem do Estado de Sergipe (EMBRAPA/UFS). Inclui modulo de pesquisa agricola
-    com conversao de doses por hectare para unidades experimentais (metro linear, cova,
-    vaso e parcela), busca de precos de fertilizantes via CEPEA/AgroLink, e graficos
-    interativos de fertilidade do solo. Culturas suportadas: milho, feijao,
+    calagem e gessagem de culturas agricolas, com modulo completo de pesquisa agricola,
+    analises estatisticas avancadas, integracao de dados ambientais, classificacao do
+    nivel tecnologico do sistema de producao e gerador de relatorios. Baseado no Manual
+    de Adubacao e Calagem para Minas Gerais - 5a Aproximacao (2023) e no Manual de
+    Recomendacoes de Adubacao e Calagem do Estado de Sergipe (EMBRAPA/UFS).
+    Funcionalidades principais: (1) interpretacao automatizada de analises de solo
+    (pH, materia organica opcional, P-Mehlich, K, Ca, Mg, Al, H+Al, micronutrientes);
+    fosforo remanescente (P-rem) como alternativa a textura na interpretacao do P;
+    argila e materia organica opcionais sem bloqueio da analise; (2) recomendacao de
+    adubacao NPK para 9 culturas (milho, feijao, cana-de-acucar, arroz, mandioca,
+    amendoim, sorgo, pastagem e abacaxi), calagem por 3 metodos (saturacao por bases
+    V%, neutralizacao de Al3+, tampao SMP) e gessagem por 3 metodos (textura, V%
+    subsolo, saturacao por Ca2+ na CTCef segundo Caires e Guimaraes 2018); (3)
+    classificacao automatica do nivel tecnologico do sistema de producao (baixo, medio
+    ou alto) com base em checklist interativo de 21 praticas agrupadas em 5 categorias
+    (semente, plantio, fertilidade, manejo fitossanitario, gestao), com pontuacao
+    ponderada e ajuste automatico das doses de NPK por fatores calibrados nos manuais
+    de referencia (N plantio x0.70-1.20, N cobertura x0.65-1.30, P2O5 x0.75-1.15,
+    K2O x0.75-1.10 conforme nivel baixo, medio ou alto); (4) modulo fenologico do
+    milho com ilustracao SVG botanica realista dos estadios V2, V4, V6 e V8 (caule
+    com gradiente cilindrico, nos, folhas arqueadas com nervura central, raizes
+    fasciculadas e escora, espiga em V8), com logica de parcelamento de N em cobertura
+    baseada na dose total: dose unica em V4 para N < 60 kg/ha, parcelas V4+V6 para
+    60-119 kg/ha e V4+V8 para N >= 120 kg/ha; (5) relatorio completo em HTML exportavel
+    como PDF contendo identificacao do produtor e propriedade, tabela de fertilidade com
+    badges coloridos por classe (muito baixo a muito alto), calagem e gessagem,
+    adubacao NPK, secao de nivel tecnologico com barra de progresso e justificativa
+    tecnica referenciada, e ilustracao fenologica do milho; (6) modulo de analise em
+    lote com template Excel padronizado para download, leitura flexivel de qualquer
+    planilha via mapeamento automatico de 150 sinonimos de nomes de colunas em portugues
+    e ingles, tabela de revisao editavel e exportacao de recomendacoes em Excel e CSV;
+    (7) analise financeira comparativa entre 16 fontes comerciais de N, P2O5 e K2O com
+    links para CEPEA/ESALQ, AgroLink e Menor Preco Brasil; (8) modo pesquisa com
+    conversao de doses ha-1 para unidades experimentais (metro linear, cova, vaso,
+    parcela) e gerador de gradiente de tratamentos; (9) banco regional de fertilidade
+    com upload de planilha, mapas coropleticos por municipio via geobr e leaflet,
+    serie temporal, benchmarking, semaforo regional (verde/amarelo/vermelho) com metas
+    personalizaveis por parametro, e cruzamento de dados climaticos com fertilidade;
+    (10) dados ambientais via API Open-Meteo (sem chave): temperatura, precipitacao,
+    evapotranspiracao ET0 (FAO-56) e balanco hidrico para qualquer municipio do Brasil,
+    com integracao ao banco regional por coordenadas geograficas; (11) 11 analises
+    estatisticas: descritiva completa com testes de normalidade (Shapiro-Wilk n<=50,
+    Kolmogorov-Smirnov n>50), ANOVA parametrica com pos-hoc automatico Tukey (<=10
+    grupos) ou Scott-Knott (>10 grupos) com letras de agrupamento e boxplots coloridos
+    por grupo de significancia, Kruskal-Wallis com pos-hoc Dunn (Bonferroni),
+    Mann-Whitney com estimativa Hodges-Lehmann, correlacao, regressao simples e
+    multipla com VIF, analise de trilha, PCA, cluster k-means, Cate-Nelson e
+    linear-plato; filtro de cultura nas analises estatisticas; (12) modulos avancados
+    protegidos por controle de acesso via cadeado (Lote, Pesquisa, Banco Regional e
+    Clima ocultados para usuario basico). Culturas suportadas: milho, feijao,
     cana-de-acucar, arroz, mandioca, amendoim, sorgo, pastagem e abacaxi.
 License: GPL (>= 3)
 License_file: LICENSE
@@ -32,6 +76,7 @@ Imports:
     shiny (>= 1.7.0),
     rappdirs
 Suggests:
+    shinyjs,
     shinydashboard,
     shinyWidgets,
     plotly,
@@ -47,6 +92,7 @@ Suggests:
     rvest,
     leaflet,
     readxl,
+    pdftools,
     geobr,
     sf,
     testthat (>= 3.0.0)

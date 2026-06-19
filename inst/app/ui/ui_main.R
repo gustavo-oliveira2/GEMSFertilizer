@@ -3,6 +3,7 @@
 # ==============================================================================
 
 ui <- fluidPage(
+  shinyjs::useShinyjs(),
   # Metadados e CSS
   tags$head(
     tags$meta(charset = "UTF-8"),
@@ -142,12 +143,22 @@ ui <- fluidPage(
                 numericInput("ph", NULL, value = 5.5, min = 3.5, max = 9.0, step = 0.1, width = "100%")
               ),
               div(class = "form-group-custom",
-                label_custom("M.O. (dag kg<sup>-1</sup>)", ""),
-                numericInput("mo", NULL, value = 2.5, min = 0, max = 15, step = 0.1, width = "100%")
+                label_custom(HTML("M.O. (dag kg<sup>-1</sup>) <span style='font-size:10px;color:#aaa;font-weight:400;'>(opcional)</span>"), ""),
+                numericInput("mo", NULL, value = NA, min = 0, max = 15, step = 0.1, width = "100%")
               ),
               div(class = "form-group-custom",
                 label_custom("Argila (%)", ""),
-                numericInput("argila", NULL, value = 30, min = 0, max = 100, step = 5, width = "100%")
+                numericInput("argila", NULL, value = NA, min = 0, max = 100, step = 5, width = "100%"),
+                div(style = "font-size:10px;color:#999;margin-top:2px;line-height:1.3;",
+                  "Opcional se P-rem informado"
+                )
+              ),
+              div(class = "form-group-custom",
+                label_custom(HTML("P-rem (mg L<sup>-1</sup>) <span style='font-size:10px;color:#aaa;font-weight:400;'>(opcional)</span>"), ""),
+                numericInput("p_rem", NULL, value = NA, min = 0, max = 60, step = 0.5, width = "100%"),
+                div(style = "font-size:10px; color:#999; margin-top:2px; line-height:1.3;",
+                  "Substitui Argila na interpreta\u00e7\u00e3o do P"
+                )
               )
             )
           ),
@@ -292,6 +303,51 @@ ui <- fluidPage(
         )
       ),
       
+      # NÍVEL TECNOLÓGICO — checklist interativo
+      div(class = "card-section",
+        div(class = "card-header",
+          HTML('<i class="bi bi-award"></i> N\u00edvel Tecnol\u00f3gico do Sistema de Produ\u00e7\u00e3o'),
+          # Badge mostrando nível atual
+          uiOutput("badge_nivel_tec", inline = TRUE)
+        ),
+        div(class = "card-body",
+          p(style = "font-size:11px; color:#888; margin-bottom:10px;",
+            HTML('<i class="bi bi-info-circle"></i> Marque as pr\u00e1ticas adotadas na propriedade. ',
+                 'O app classifica automaticamente o n\u00edvel e ajusta as doses de NPK.')),
+          # Checklist gerado dinamicamente
+          uiOutput("checklist_tratos_ui"),
+          # Resultado da classificação
+          uiOutput("resultado_nivel_tec")
+        )
+      ),
+
+      # INFORMAÇÕES DO PRODUTOR (para relatório)
+      div(class = "card-section",
+        div(class = "card-header", HTML('<i class="bi bi-person-lines-fill"></i> Informa\u00e7\u00f5es do Produtor')),
+        div(class = "card-body",
+          div(class = "form-row-2",
+            div(class = "form-group-custom",
+              label_custom("Produtor", "bi-person"),
+              textInput("info_produtor", NULL, value = "", placeholder = "Nome do produtor", width = "100%")
+            ),
+            div(class = "form-group-custom",
+              label_custom("Propriedade", "bi-house"),
+              textInput("info_propriedade", NULL, value = "", placeholder = "Nome da fazenda/área", width = "100%")
+            )
+          ),
+          div(class = "form-row-2",
+            div(class = "form-group-custom",
+              label_custom("Município / UF", "bi-geo-alt"),
+              textInput("info_municipio", NULL, value = "", placeholder = "ex: N. Sra. da Glória / SE", width = "100%")
+            ),
+            div(class = "form-group-custom",
+              label_custom("Identificação da amostra", "bi-tag"),
+              textInput("info_amostra", NULL, value = "", placeholder = "ex: Talhão A / AM-001", width = "100%")
+            )
+          )
+        )
+      ),
+
       # BOTÃO CALCULAR
       div(class = "btn-container",
         actionButton("calcular", 
@@ -308,13 +364,26 @@ ui <- fluidPage(
       # TABS DE RESULTADO
       div(class = "results-tabs",
         div(class = "tab-list",
-          actionButton("tab_solo",     HTML('<i class="bi bi-layers"></i> Solo'),          class = "tab-btn active-tab"),
-          actionButton("tab_calagem",  HTML('<i class="bi bi-droplet-fill"></i> Calagem'),  class = "tab-btn"),
-          actionButton("tab_adubacao", HTML('<i class="bi bi-bag-fill"></i> Aduba\u00e7\u00e3o'), class = "tab-btn"),
-          actionButton("tab_financeiro", HTML('<i class="bi bi-currency-dollar"></i> Custos'), class = "tab-btn"),
-          actionButton("tab_graficos", HTML('<i class="bi bi-bar-chart-fill"></i> Gr\u00e1ficos'), class = "tab-btn"),
-          actionButton("tab_pesquisa", HTML('<i class="bi bi-journal-medical"></i> Pesquisa'), class = "tab-btn"),
-          actionButton("tab_regional", HTML('<i class="bi bi-map-fill"></i> Banco Regional'), class = "tab-btn")
+          actionButton("tab_solo",      HTML('<i class="bi bi-layers"></i> Solo'),           class = "tab-btn active-tab"),
+          actionButton("tab_calagem",   HTML('<i class="bi bi-droplet-fill"></i> Calagem'),  class = "tab-btn"),
+          actionButton("tab_adubacao",  HTML('<i class="bi bi-bag-fill"></i> Aduba\u00e7\u00e3o'), class = "tab-btn"),
+          actionButton("tab_financeiro",HTML('<i class="bi bi-currency-dollar"></i> Custos'),class = "tab-btn"),
+          actionButton("tab_graficos",  HTML('<i class="bi bi-bar-chart-fill"></i> Gr\u00e1ficos'), class = "tab-btn"),
+          # Abas avançadas — ocultas por padrão via shinyjs
+          shinyjs::hidden(
+            actionButton("tab_lote",    HTML('<i class="bi bi-file-earmark-spreadsheet"></i> Lote'), class = "tab-btn"),
+            actionButton("tab_pesquisa",HTML('<i class="bi bi-journal-medical"></i> Pesquisa'),  class = "tab-btn"),
+            actionButton("tab_regional",HTML('<i class="bi bi-map-fill"></i> Banco Regional'),   class = "tab-btn"),
+            actionButton("tab_clima",   HTML('<i class="bi bi-cloud-sun"></i> Clima'),            class = "tab-btn")
+          ),
+          # Cadeado para liberar módulos avançados
+          div(style = "margin-left:auto;",
+            actionButton("btn_toggle_avancado",
+              HTML('<i class="bi bi-lock-fill"></i>'),
+              class = "btn-unlock",
+              title = "Liberar m\u00f3dulos avan\u00e7ados"
+            )
+          )
         )
       ),
       
@@ -602,6 +671,115 @@ ui <- fluidPage(
 
         # Conteúdo (aparece após upload)
         uiOutput("regional_conteudo")
+      ),
+
+      # PAINEL ANÁLISE EM LOTE
+      div(id = "painel_lote", class = "results-panel",
+        div(class = "pesq-header", style = "background: linear-gradient(135deg, #1b3a2d, #2d6a4f);",
+          div(class = "pesq-header-icon", HTML('<i class="bi bi-file-earmark-spreadsheet"></i>')),
+          div(
+            h3(class = "pesq-header-title", "An\u00e1lise em Lote"),
+            p(class = "pesq-header-sub",
+              "Importe qualquer planilha Excel/CSV com dados de fertilidade e gere recomenda\u00e7\u00f5es para m\u00faltiplas amostras")
+          )
+        ),
+
+        # ── Passo 1: Baixar template ──────────────────────────────────────
+        div(class = "result-card",
+          div(class = "result-card-title",
+            HTML('<i class="bi bi-download"></i> Passo 1 \u2014 Baixe o template (opcional)')),
+          p(style = "font-size:12px; color:#666; margin-bottom:10px;",
+            HTML('Use o template abaixo para garantir compatibilidade, ',
+                 'ou envie diretamente a planilha do seu laborat\u00f3rio. ',
+                 'O app detecta automaticamente as colunas de <b>qualquer formato</b>.')),
+          div(style = "display:flex; gap:10px; align-items:center; flex-wrap:wrap;",
+            downloadButton("btn_download_template_lote",
+              label = HTML('<i class="bi bi-file-earmark-excel-fill"></i>&nbsp; Baixar Template Excel'),
+              class = "btn-secondary"),
+            p(style = "font-size:11px; color:#aaa; margin:0;",
+              HTML('Inclui 3 amostras de exemplo e aba "Guia" com instru\u00e7\u00f5es detalhadas.'))
+          )
+        ),
+
+        # ── Passo 2: Upload ───────────────────────────────────────────────
+        div(class = "result-card",
+          div(class = "result-card-title",
+            HTML('<i class="bi bi-cloud-upload"></i> Passo 2 \u2014 Envie sua planilha')),
+          p(style = "font-size:11.5px; color:#888; margin-bottom:10px;",
+            HTML('<i class="bi bi-info-circle"></i> Formatos aceitos: <b>XLSX, XLS, CSV</b>. ',
+                 'O app detecta automaticamente as colunas, mesmo com nomes em portugu\u00eas, ',
+                 'ingl\u00eas ou com varia\u00e7\u00f5es (',
+                 '"F\u00f3sforo", "P", "P-Mehlich" \u2192 todos mapeiam para <b>P</b>).')),
+          fileInput("lote_file", NULL,
+            multiple    = FALSE,
+            accept      = c(".xlsx",".xls",".csv",".txt"),
+            width       = "100%",
+            buttonLabel = HTML('<i class="bi bi-folder2-open"></i> Escolher arquivo'),
+            placeholder = "Nenhum arquivo selecionado"),
+          uiOutput("lote_mapeamento_cols"),
+          uiOutput("lote_upload_status")
+        ),
+
+        # ── Passo 3: Revisar + configurar ────────────────────────────────
+        uiOutput("lote_tabela_revisao"),
+
+        # ── Passo 4: Parâmetros de recomendação ──────────────────────────
+        uiOutput("lote_config_rec"),
+
+        # ── Passo 5: Calcular ─────────────────────────────────────────────
+        uiOutput("lote_btn_calcular"),
+
+        # ── Resultados ────────────────────────────────────────────────────
+        uiOutput("lote_resultados")
+      ),
+
+      # PAINEL CLIMA
+      div(id = "painel_clima", class = "results-panel",
+        div(class = "pesq-header", style = "background: linear-gradient(135deg, #0a3d62, #1e6fa5);",
+          div(class = "pesq-header-icon", HTML('<i class="bi bi-cloud-sun-fill"></i>')),
+          div(
+            h3(class = "pesq-header-title", "Dados Ambientais e Clim\u00e1ticos"),
+            p(class = "pesq-header-sub",
+              "Temperatura, chuva, evapotranspira\u00e7\u00e3o e balan\u00e7o h\u00eddrico via Open-Meteo (qualquer munic\u00edpio do Brasil)")
+          )
+        ),
+        div(class = "result-card",
+          div(class = "result-card-title",
+            HTML('<i class="bi bi-geo-alt-fill"></i> Localiza\u00e7\u00e3o e Per\u00edodo')),
+          div(class = "form-row-2",
+            div(class = "form-group-custom",
+              label_custom("Latitude (graus decimais)", "bi-pin-map"),
+              numericInput("clima_lat", NULL, value = -10.55, min = -35, max = 5, step = 0.001, width = "100%")
+            ),
+            div(class = "form-group-custom",
+              label_custom("Longitude (graus decimais)", "bi-pin-map-fill"),
+              numericInput("clima_lon", NULL, value = -37.42, min = -75, max = -30, step = 0.001, width = "100%")
+            )
+          ),
+          p(style = "font-size:10.5px; color:#aaa; margin:-8px 0 8px;",
+            HTML('<i class="bi bi-lightbulb"></i> Se o Banco Regional estiver carregado, as coordenadas dos munic\u00edpios aparecem no seletor abaixo.')),
+          uiOutput("clima_municipios_banco"),
+          div(class = "form-row-2",
+            div(class = "form-group-custom",
+              label_custom("Data inicial", "bi-calendar-event"),
+              dateInput("clima_inicio", NULL,
+                value = Sys.Date() - 365, format = "dd/mm/yyyy",
+                language = "pt", width = "100%")
+            ),
+            div(class = "form-group-custom",
+              label_custom("Data final", "bi-calendar-check"),
+              dateInput("clima_fim", NULL,
+                value = Sys.Date() - 1, format = "dd/mm/yyyy",
+                language = "pt", width = "100%")
+            )
+          ),
+          div(class = "btn-container",
+            actionButton("btn_buscar_clima",
+              HTML('<i class="bi bi-cloud-download"></i>&nbsp; BUSCAR DADOS CLIM\u00c1TICOS'),
+              class = "btn-calcular", width = "100%")
+          )
+        ),
+        uiOutput("clima_resultado")
       )
     )
   ),

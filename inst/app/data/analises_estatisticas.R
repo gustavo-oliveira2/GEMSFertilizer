@@ -241,46 +241,180 @@ calc_analise_trilha <- function(df, x_vars, y_var) {
 }
 
 # ------------------------------------------------------------------------------
-# 3. ANOVA + TUKEY
+# 3. ANOVA + TUKEY (≤10 grupos) ou SCOTT-KNOTT (>10 grupos) com letras
 # ------------------------------------------------------------------------------
 calc_anova <- function(df, atributo, grupo) {
   d <- df[, c(atributo, grupo)]
   names(d) <- c("y", "g")
   d <- d[stats::complete.cases(d), ]
   d$g <- as.factor(d$g)
+  k <- length(levels(d$g))
 
-  if (nrow(d) < 4 || length(levels(d$g)) < 2) {
+  if (nrow(d) < 4 || k < 2)
     return(list(erro = "Dados insuficientes ou apenas um grupo dispon\u00edvel."))
-  }
-  if (any(table(d$g) < 2)) {
+  if (any(table(d$g) < 2))
     return(list(erro = "H\u00e1 grupo(s) com menos de 2 observa\u00e7\u00f5es \u2014 remova-os ou agregue."))
-  }
 
-  mod   <- stats::aov(y ~ g, data = d)
+  mod    <- stats::aov(y ~ g, data = d)
   resumo <- summary(mod)
   p_val  <- resumo[[1]][["Pr(>F)"]][1]
-  tukey  <- stats::TukeyHSD(mod)
+  f_val  <- resumo[[1]][["F value"]][1]
+  gl_res <- resumo[[1]][["Df"]][2]
+  qmr    <- resumo[[1]][["Mean Sq"]][2]  # Quadrado Médio do Resíduo
 
   # Médias por grupo
-  medias <- do.call(rbind, lapply(split(d$y, d$g), function(x) {
-    data.frame(n = length(x), media = round(mean(x), 2), dp = round(stats::sd(x), 2))
-  }))
+  medias_lst <- lapply(split(d$y, d$g), function(x)
+    data.frame(n = length(x), media = round(mean(x), 4), dp = round(stats::sd(x), 4))
+  )
+  medias <- do.call(rbind, medias_lst)
   medias$grupo <- rownames(medias)
   rownames(medias) <- NULL
   medias <- medias[order(-medias$media), c("grupo","n","media","dp")]
 
-  # Pares significativos do Tukey
-  tk_df <- as.data.frame(tukey$g)
-  tk_df$par <- rownames(tk_df)
-  names(tk_df) <- c("diferenca", "lwr", "upr", "p_adj", "par")
-  tk_sig <- tk_df[tk_df$p_adj < 0.05, c("par", "diferenca", "p_adj")]
-  tk_sig$diferenca <- round(tk_sig$diferenca, 2)
-  tk_sig$p_adj <- round(tk_sig$p_adj, 4)
-  names(tk_sig) <- c("Compara\u00e7\u00e3o", "Diferen\u00e7a", "p-ajustado")
+  metodo_posthoc <- if (k <= 10) "Tukey" else "Scott-Knott"
 
-  list(erro = NULL, p_global = p_val, medias = medias, tukey_sig = tk_sig,
-       n = nrow(d), dados = d, k = length(levels(d$g)))
+  # ── PÓS-HOC ────────────────────────────────────────────────────────────────
+  if (metodo_posthoc == "Tukey") {
+    letras <- tukey_letras(d, qmr, gl_res, k)
+  } else {
+    letras <- scott_knott_letras(d, qmr, gl_res)
+  }
+
+  # Junta letras nas médias
+  medias$letra <- letras[medias$grupo]
+  medias$media_letra <- paste0(medias$media, " ", medias$letra)
+
+  list(
+    erro = NULL, p_global = round(p_val, 5), f_val = round(f_val, 3),
+    gl_trat = k - 1, gl_res = gl_res,
+    medias = medias, letras = letras,
+    n = nrow(d), dados = d, k = k,
+    metodo_posthoc = metodo_posthoc
+  )
 }
+
+# ── TUKEY — letras de agrupamento (sem pacotes externos) ─────────────────────
+tukey_letras <- function(d, qmr, gl_res, k) {
+  lvls  <- levels(d$g)
+  medias_v <- tapply(d$y, d$g, mean)
+  ns_v     <- tapply(d$y, d$g, length)
+  alpha <- 0.05
+
+  # Matriz de diferenças significativas entre pares
+  sig_mat <- matrix(FALSE, k, k, dimnames = list(lvls, lvls))
+  for (i in seq_len(k - 1)) {
+    for (j in (i + 1):k) {
+      gi <- lvls[i]; gj <- lvls[j]
+      ni <- ns_v[gi]; nj <- ns_v[gj]
+      se <- sqrt(qmr * (1/ni + 1/nj) / 2)
+      q  <- abs(medias_v[gi] - medias_v[gj]) / se
+      # p-valor via distribuição Tukey (Studentized Range)
+      p  <- 1 - stats::ptukey(q, k, gl_res)
+      sig_mat[gi, gj] <- p < alpha
+      sig_mat[gj, gi] <- p < alpha
+    }
+  }
+  atribuir_letras(lvls, medias_v, sig_mat)
+}
+
+# ── SCOTT-KNOTT — algoritmo de partição recursiva ────────────────────────────
+scott_knott_letras <- function(d, qmr, gl_res) {
+  lvls     <- levels(d$g)
+  medias_v <- sort(tapply(d$y, d$g, mean))
+  ns_v     <- tapply(d$y, d$g, length)
+  k        <- length(lvls)
+
+  # Particionamento recursivo de Scott-Knott
+  grupos <- sk_recursivo(names(medias_v), medias_v, ns_v, qmr, gl_res)
+
+  # Atribui letras a partir dos grupos (a = maior média)
+  letras <- character(k)
+  names(letras) <- names(medias_v)
+  letra_seq <- letters
+  for (idx in seq_along(grupos)) {
+    for (g in grupos[[idx]]) letras[g] <- letra_seq[idx]
+  }
+  letras
+}
+
+sk_recursivo <- function(nomes, medias, ns, qmr, gl_res, grupos = list()) {
+  m <- length(nomes)
+  if (m <= 1) return(c(grupos, list(nomes)))
+
+  n_tot  <- sum(ns[nomes])
+  media_g <- sum(medias[nomes] * ns[nomes]) / n_tot
+
+  # Estatística lambda de Scott-Knott — maior partição que maximiza SQentre
+  melhor_lambda <- -Inf
+  melhor_corte  <- 1
+
+  for (corte in seq_len(m - 1)) {
+    g1 <- nomes[seq_len(corte)]
+    g2 <- nomes[(corte + 1):m]
+    n1 <- sum(ns[g1]); n2 <- sum(ns[g2])
+    m1 <- sum(medias[g1] * ns[g1]) / n1
+    m2 <- sum(medias[g2] * ns[g2]) / n2
+    sq <- n1 * n2 / (n1 + n2) * (m1 - m2)^2
+    if (sq > melhor_lambda) {
+      melhor_lambda <- sq
+      melhor_corte  <- corte
+    }
+  }
+
+  # Teste qui-quadrado de Scott-Knott
+  # B = lambda / (sigma² total estimado)
+  sigma2 <- qmr
+  B <- melhor_lambda / sigma2
+  # Graus de liberdade = k partições - 1 (aprox.)
+  p_sk <- 1 - stats::pchisq(B, df = 1)
+
+  g1 <- nomes[seq_len(melhor_corte)]
+  g2 <- nomes[(melhor_corte + 1):m]
+
+  if (p_sk < 0.05) {
+    # Divisão significativa — recursão em cada subgrupo
+    r1 <- sk_recursivo(g1, medias, ns, qmr, gl_res, list())
+    r2 <- sk_recursivo(g2, medias, ns, qmr, gl_res, list())
+    c(grupos, r1, r2)
+  } else {
+    # Sem divisão — todos no mesmo grupo
+    c(grupos, list(nomes))
+  }
+}
+
+# ── ATRIBUI LETRAS a partir de matriz de significância (Tukey) ───────────────
+atribuir_letras <- function(lvls, medias_v, sig_mat) {
+  # Ordena por média decrescente
+  ord   <- names(sort(medias_v, decreasing = TRUE))
+  k     <- length(ord)
+  letras <- character(k)
+  names(letras) <- ord
+
+  letra_atual <- 1
+  grupos_ativos <- list()  # lista de vetores de grupos em andamento
+
+  for (i in seq_len(k)) {
+    trt <- ord[i]
+    # Verifica se este tratamento pode ser adicionado a algum grupo ativo
+    adicionado <- FALSE
+    for (gi in seq_along(grupos_ativos)) {
+      grp <- grupos_ativos[[gi]]
+      # Pode entrar no grupo se não difere significativamente de nenhum membro
+      pode <- !any(sig_mat[trt, grp])
+      if (pode) {
+        grupos_ativos[[gi]] <- c(grp, trt)
+        letras[trt] <- paste0(letras[trt], letters[gi])
+        adicionado <- TRUE
+      }
+    }
+    if (!adicionado) {
+      grupos_ativos <- c(grupos_ativos, list(trt))
+      letras[trt] <- paste0(letras[trt], letters[length(grupos_ativos)])
+    }
+  }
+  letras
+}
+
 
 # ------------------------------------------------------------------------------
 # 4. PCA (componentes principais)
@@ -576,4 +710,321 @@ interpretar_trilha <- function(res, nomes_x, nome_y) {
     "), correla\u00e7\u00e3o total com ", nome_y, " = ", res$resumo$correlacao_total[idx_max], ".",
     txt_indireto, txt_multicol
   )
+}
+
+# ==============================================================================
+# ESTATÍSTICA DESCRITIVA COMPLETA + NORMALIDADE
+# ==============================================================================
+
+calc_descritiva <- function(df, variaveis, grupo_var = NULL) {
+  if (length(variaveis) == 0)
+    return(list(erro = "Selecione ao menos uma variável."))
+
+  resultados <- list()
+
+  for (var in variaveis) {
+    if (!var %in% names(df)) next
+    x_all <- df[[var]]
+    if (!is.null(grupo_var) && grupo_var != "Nenhum" && grupo_var %in% names(df)) {
+      grupos <- split(x_all, df[[grupo_var]])
+    } else {
+      grupos <- list("Todos" = x_all)
+    }
+
+    for (grp_nome in names(grupos)) {
+      x <- as.numeric(na.omit(grupos[[grp_nome]]))
+      n <- length(x)
+      if (n < 3) next
+
+      # Medidas de posição
+      media   <- round(mean(x), 4)
+      mediana <- round(median(x), 4)
+      # Moda (valor mais frequente; NA se todos únicos)
+      tab_x <- table(round(x, 3))
+      moda  <- if (max(tab_x) > 1) as.numeric(names(which.max(tab_x))) else NA
+
+      # Medidas de dispersão
+      dp      <- round(sd(x), 4)
+      variancia <- round(var(x), 4)
+      cv_pct  <- round(dp / abs(media) * 100, 2)
+      minimo  <- round(min(x), 4)
+      maximo  <- round(max(x), 4)
+      amplitude <- round(maximo - minimo, 4)
+      q1      <- round(quantile(x, 0.25), 4)
+      q3      <- round(quantile(x, 0.75), 4)
+      iqr     <- round(q3 - q1, 4)
+      p10     <- round(quantile(x, 0.10), 4)
+      p90     <- round(quantile(x, 0.90), 4)
+
+      # Assimetria (Pearson / momento) e Curtose (excesso)
+      n_d <- n
+      assimetria <- round(
+        (n_d / ((n_d - 1) * (n_d - 2))) *
+        sum(((x - media) / dp)^3), 4
+      )
+      curtose <- round(
+        ((n_d * (n_d + 1)) / ((n_d - 1) * (n_d - 2) * (n_d - 3))) *
+        sum(((x - media) / dp)^4) -
+        (3 * (n_d - 1)^2) / ((n_d - 2) * (n_d - 3)), 4
+      )
+
+      # Outliers (método Tukey / IQR)
+      lim_inf <- q1 - 1.5 * iqr
+      lim_sup <- q3 + 1.5 * iqr
+      outliers <- x[x < lim_inf | x > lim_sup]
+      n_outliers <- length(outliers)
+
+      # Normalidade
+      norm <- testar_normalidade(x)
+
+      # Classificação do CV%
+      cv_class <- if (cv_pct <= 10) "Baixo (dados homogêneos)"
+                  else if (cv_pct <= 20) "Médio"
+                  else if (cv_pct <= 30) "Alto"
+                  else "Muito alto (dados heterogêneos)"
+
+      resultados[[paste0(var, "___", grp_nome)]] <- list(
+        variavel = var, grupo = grp_nome, n = n,
+        media = media, mediana = mediana, moda = moda,
+        dp = dp, variancia = variancia, cv_pct = cv_pct, cv_class = cv_class,
+        minimo = minimo, maximo = maximo, amplitude = amplitude,
+        q1 = q1, q3 = q3, iqr = iqr, p10 = p10, p90 = p90,
+        assimetria = assimetria, curtose = curtose,
+        n_outliers = n_outliers, outliers = outliers,
+        lim_inf_outlier = round(lim_inf, 4),
+        lim_sup_outlier = round(lim_sup, 4),
+        normalidade = norm,
+        x_vals = x
+      )
+    }
+  }
+
+  if (length(resultados) == 0)
+    return(list(erro = "Nenhum dado válido encontrado para as variáveis selecionadas."))
+
+  list(erro = NULL, resultados = resultados,
+       variaveis = variaveis, grupo_var = grupo_var)
+}
+
+# Testa normalidade: Shapiro-Wilk (n≤50) ou Lilliefors via KS (n>50)
+testar_normalidade <- function(x) {
+  n <- length(x)
+  if (n < 3) return(list(teste = "ND", estatistica = NA, p = NA,
+                          normal = NA, interpretacao = "n < 3"))
+
+  if (n <= 50) {
+    sw <- tryCatch(stats::shapiro.test(x), error = function(e) NULL)
+    if (is.null(sw)) return(list(teste = "SW", estatistica = NA, p = NA,
+                                  normal = NA, interpretacao = "Erro no teste"))
+    p   <- sw$p.value
+    est <- round(sw$statistic, 4)
+    nm  <- "Shapiro-Wilk"
+  } else {
+    # Lilliefors (correção do KS para média e DP estimados da amostra)
+    x_std <- (x - mean(x)) / sd(x)
+    ks <- tryCatch(stats::ks.test(x_std, "pnorm"), error = function(e) NULL)
+    if (is.null(ks)) return(list(teste = "KS", estatistica = NA, p = NA,
+                                  normal = NA, interpretacao = "Erro no teste"))
+    p   <- ks$p.value
+    est <- round(ks$statistic, 4)
+    nm  <- "Kolmogorov-Smirnov"
+  }
+
+  normal <- p >= 0.05
+
+  recomendacao <- if (normal) {
+    paste0("Distribuição normal (p = ", round(p, 4), "). ",
+           "ANOVA paramétrica é adequada.")
+  } else if (n <= 10) {
+    paste0("Distribuição não normal (p = ", round(p, 4), "). ",
+           "n pequeno — use Kruskal-Wallis ou transforme os dados.")
+  } else {
+    cv_x <- sd(x) / abs(mean(x)) * 100
+    transf <- if (all(x > 0)) {
+      if (cv_x > 30) "log(x) ou √x (dados com alta variabilidade)"
+      else "√x (assimetria moderada)"
+    } else "Sem transformação simples (há zeros/negativos) — use Kruskal-Wallis"
+    paste0("Distribuição não normal (p = ", round(p, 4), "). ",
+           "Sugestão de transformação: ", transf,
+           ". Alternativa: Kruskal-Wallis.")
+  }
+
+  list(teste = nm, estatistica = est, p = round(p, 4),
+       normal = normal, interpretacao = recomendacao)
+}
+
+# ==============================================================================
+# KRUSKAL-WALLIS + PÓS-HOC DUNN
+# ==============================================================================
+
+calc_kruskal <- function(df, atributo, grupo) {
+  if (!atributo %in% names(df))
+    return(list(erro = paste0("Variável '", atributo, "' não encontrada.")))
+  if (!grupo %in% names(df))
+    return(list(erro = paste0("Variável de grupo '", grupo, "' não encontrada.")))
+
+  d <- df[!is.na(df[[atributo]]) & !is.na(df[[grupo]]), ]
+  d[[grupo]] <- as.factor(d[[grupo]])
+  n_grupos <- length(levels(d[[grupo]]))
+
+  if (n_grupos < 2)
+    return(list(erro = "Selecione um grupo com ao menos 2 níveis."))
+  if (nrow(d) < 6)
+    return(list(erro = "Dados insuficientes (mínimo 6 observações)."))
+
+  # Kruskal-Wallis
+  kw <- tryCatch(
+    stats::kruskal.test(d[[atributo]] ~ d[[grupo]]),
+    error = function(e) list(erro = conditionMessage(e))
+  )
+  if (!is.null(kw$erro)) return(list(erro = kw$erro))
+
+  # Pós-hoc Dunn com correção de Bonferroni (implementado sem pacotes extras)
+  dunn <- dunn_test_manual(d[[atributo]], d[[grupo]])
+
+  # Medianas por grupo
+  medianas <- tapply(d[[atributo]], d[[grupo]], median, na.rm = TRUE)
+  ns       <- tapply(d[[atributo]], d[[grupo]], function(x) sum(!is.na(x)))
+
+  list(
+    erro       = NULL,
+    n          = nrow(d),
+    n_grupos   = n_grupos,
+    H          = round(kw$statistic, 4),
+    df         = kw$parameter,
+    p          = round(kw$p.value, 5),
+    significativo = kw$p.value < 0.05,
+    medianas   = round(medianas, 3),
+    ns         = ns,
+    dunn       = dunn,
+    atributo   = atributo,
+    grupo      = grupo
+  )
+}
+
+# Teste de Dunn manual (sem dependência de pacote)
+dunn_test_manual <- function(y, g) {
+  g   <- as.factor(g)
+  lvl <- levels(g)
+  k   <- length(lvl)
+  n   <- length(y)
+  rks <- rank(y)   # ranks globais (empates pela média)
+
+  pares <- combn(lvl, 2, simplify = FALSE)
+  resultados <- lapply(pares, function(par) {
+    i1 <- g == par[1]; i2 <- g == par[2]
+    n1 <- sum(i1);     n2 <- sum(i2)
+    R1 <- mean(rks[i1]); R2 <- mean(rks[i2])
+    # Estatística z de Dunn
+    # Fator de correção para empates
+    tab <- table(rks)
+    corr <- sum(tab^3 - tab) / (12 * (n - 1))
+    se_dunn <- sqrt((n * (n + 1) / 12 - corr) * (1/n1 + 1/n2))
+    z  <- (R1 - R2) / se_dunn
+    p_raw <- 2 * stats::pnorm(-abs(z))
+    data.frame(
+      Grupo_1 = par[1], Grupo_2 = par[2],
+      Z = round(z, 3), p_bruto = round(p_raw, 5),
+      stringsAsFactors = FALSE
+    )
+  })
+
+  df_dunn <- do.call(rbind, resultados)
+  # Correção de Bonferroni
+  m <- nrow(df_dunn)
+  df_dunn$p_bonferroni <- round(pmin(df_dunn$p_bruto * m, 1), 5)
+  df_dunn$significativo <- df_dunn$p_bonferroni < 0.05
+  df_dunn
+}
+
+# ==============================================================================
+# MANN-WHITNEY (2 grupos independentes)
+# ==============================================================================
+
+calc_mann_whitney <- function(df, atributo, grupo) {
+  if (!atributo %in% names(df))
+    return(list(erro = paste0("Variável '", atributo, "' não encontrada.")))
+  if (!grupo %in% names(df))
+    return(list(erro = paste0("Grupo '", grupo, "' não encontrado.")))
+
+  d    <- df[!is.na(df[[atributo]]) & !is.na(df[[grupo]]), ]
+  lvls <- unique(as.character(d[[grupo]]))
+
+  if (length(lvls) != 2)
+    return(list(erro = paste0(
+      "Mann-Whitney exige exatamente 2 grupos. Encontrados: ", length(lvls),
+      " (", paste(lvls, collapse=", "), "). Use Kruskal-Wallis para 3+ grupos."
+    )))
+
+  x1 <- d[[atributo]][d[[grupo]] == lvls[1]]
+  x2 <- d[[atributo]][d[[grupo]] == lvls[2]]
+
+  wt <- tryCatch(
+    stats::wilcox.test(x1, x2, exact = FALSE, conf.int = TRUE),
+    error = function(e) NULL
+  )
+  if (is.null(wt)) return(list(erro = "Erro ao executar Mann-Whitney."))
+
+  list(
+    erro = NULL,
+    n1 = length(x1), n2 = length(x2),
+    grupo1 = lvls[1], grupo2 = lvls[2],
+    mediana1 = round(median(x1), 3), mediana2 = round(median(x2), 3),
+    W = round(wt$statistic, 2),
+    p = round(wt$p.value, 5),
+    significativo = wt$p.value < 0.05,
+    estimativa = round(wt$estimate, 4),  # diferença de localização (Hodges-Lehmann)
+    atributo = atributo, grupo = grupo
+  )
+}
+
+# ==============================================================================
+# INTERPRETAÇÕES DAS ANÁLISES NÃO-PARAMÉTRICAS
+# ==============================================================================
+
+interpretar_kruskal <- function(res, nome_atrib, nome_grupo) {
+  sig <- if (res$significativo) {
+    paste0(
+      "Diferença <b>estatisticamente significativa</b> entre os grupos de <b>",
+      nome_grupo, "</b> para <b>", nome_atrib, "</b> ",
+      "(H = ", res$H, ", gl = ", res$df, ", p = ", res$p, "). ",
+      "O teste pós-hoc de Dunn (Bonferroni) indica quais pares diferem."
+    )
+  } else {
+    paste0(
+      "<b>Sem diferença significativa</b> entre os grupos de <b>", nome_grupo,
+      "</b> para <b>", nome_atrib, "</b> ",
+      "(H = ", res$H, ", gl = ", res$df, ", p = ", res$p, ")."
+    )
+  }
+
+  n_sig <- if (!is.null(res$dunn))
+    sum(res$dunn$significativo, na.rm = TRUE) else 0
+
+  dunn_txt <- if (res$significativo && n_sig > 0) {
+    paste0(" ", n_sig, " par(es) com diferença significativa após correção de Bonferroni.")
+  } else if (res$significativo) {
+    " Nenhum par isolado significativo após correção de Bonferroni."
+  } else ""
+
+  paste0(sig, dunn_txt)
+}
+
+interpretar_mann_whitney <- function(res, nome_atrib) {
+  if (res$significativo) {
+    paste0(
+      "Diferença <b>significativa</b> entre <b>", res$grupo1, "</b> (mediana = ",
+      res$mediana1, ") e <b>", res$grupo2, "</b> (mediana = ", res$mediana2,
+      ") para <b>", nome_atrib, "</b> (W = ", res$W, ", p = ", res$p, "). ",
+      "Estimativa de Hodges-Lehmann para a diferença de localização: ",
+      res$estimativa, "."
+    )
+  } else {
+    paste0(
+      "<b>Sem diferença significativa</b> entre <b>", res$grupo1,
+      "</b> (mediana = ", res$mediana1, ") e <b>", res$grupo2,
+      "</b> (mediana = ", res$mediana2, ") para <b>", nome_atrib,
+      "</b> (W = ", res$W, ", p = ", res$p, ")."
+    )
+  }
 }

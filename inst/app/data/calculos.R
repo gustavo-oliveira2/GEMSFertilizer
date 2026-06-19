@@ -3,28 +3,44 @@
 # ==============================================================================
 
 # Rodar análise completa de solo
-analisar_solo <- function(ph, mo, p, k, ca, mg, al, h_al, argila,
+analisar_solo <- function(ph, mo = NA, p, k, ca, mg, al, h_al, argila = NA,
+                          p_rem = NA,
                           s = NA, b = NA, cu = NA, fe = NA, mn = NA, zn = NA) {
-  
+
   ctc <- calcular_ctc(ca, mg, k, al, h_al)
   v   <- calcular_v(ca, mg, k, ctc)
   m   <- calcular_m(al, ca, mg, k)
   sb  <- ca + mg + (k / 391)
-  
+
+  # P-rem tem prioridade sobre argila na interpretação do P-Mehlich
+  # Se nem P-rem nem argila forem informados, usa valor médio (30%) como fallback
+  argila_efetiva <- if (!is.na(p_rem)) {
+    p_rem_to_argila(p_rem)
+  } else if (!is.na(argila)) {
+    argila
+  } else {
+    30  # fallback conservador (textura média)
+  }
+  usou_p_rem    <- !is.na(p_rem)
+  usou_fallback <- is.na(p_rem) && is.na(argila)
+
   list(
-    ph  = list(valor = ph,  interp = interpretar_ph(ph)),
-    mo  = list(valor = mo,  interp = interpretar_mo(mo)),
-    p   = list(valor = p,   interp = interpretar_p(p, argila)),
-    k   = list(valor = k,   interp = interpretar_k(k, ctc)),
-    ca  = list(valor = ca,  interp = interpretar_ca(ca)),
-    mg  = list(valor = mg,  interp = interpretar_mg(mg)),
-    al  = list(valor = al),
+    ph   = list(valor = ph,  interp = interpretar_ph(ph)),
+    mo   = if (!is.na(mo)) list(valor = mo, interp = interpretar_mo(mo)) else NULL,
+    p    = list(valor = p,   interp = interpretar_p(p, argila_efetiva),
+                p_rem = p_rem, argila_efetiva = argila_efetiva,
+                usou_p_rem = usou_p_rem,
+                usou_fallback = usou_fallback),
+    k    = list(valor = k,   interp = interpretar_k(k, ctc)),
+    ca   = list(valor = ca,  interp = interpretar_ca(ca)),
+    mg   = list(valor = mg,  interp = interpretar_mg(mg)),
+    al   = list(valor = al),
     h_al = list(valor = h_al),
-    ctc = list(valor = ctc),
-    sb  = list(valor = round(sb, 2)),
-    v   = list(valor = v,   interp = interpretar_v(v)),
-    m   = list(valor = m,   interp = interpretar_m(m)),
-    s   = if (!is.na(s)) list(valor = s, interp = interpretar_s(s)) else NULL,
+    ctc  = list(valor = ctc),
+    sb   = list(valor = round(sb, 2)),
+    v    = list(valor = v,   interp = interpretar_v(v)),
+    m    = list(valor = m,   interp = interpretar_m(m)),
+    s    = if (!is.na(s)) list(valor = s, interp = interpretar_s(s)) else NULL,
     micro = list(
       B  = if (!is.na(b))  list(valor = b,  interp = interpretar_micro(b,  "B"))  else NULL,
       Cu = if (!is.na(cu)) list(valor = cu, interp = interpretar_micro(cu, "Cu")) else NULL,
@@ -32,8 +48,22 @@ analisar_solo <- function(ph, mo, p, k, ca, mg, al, h_al, argila,
       Mn = if (!is.na(mn)) list(valor = mn, interp = interpretar_micro(mn, "Mn")) else NULL,
       Zn = if (!is.na(zn)) list(valor = zn, interp = interpretar_micro(zn, "Zn")) else NULL
     ),
-    argila = argila
+    argila = argila,
+    p_rem  = p_rem
   )
+}
+
+# Converte P-rem (mg/L) em classe textural equivalente (argila %)
+# Baseado em Alvarez V. et al. (2007): solos com P-rem < 10 = argilosos;
+# P-rem 10-30 = textura média; P-rem > 30 = arenosos
+# Retorna valor central da faixa para uso em interpretar_p()
+p_rem_to_argila <- function(p_rem) {
+  if (is.na(p_rem)) return(NA)
+  if      (p_rem <= 10)  60   # argiloso/muito argiloso: argila > 55%
+  else if (p_rem <= 20)  40   # argiloso: 36-55%
+  else if (p_rem <= 30)  25   # textura média: 16-35%
+  else if (p_rem <= 45)  12   # franco-arenoso: 8-15%
+  else                    5   # arenoso: < 8%
 }
 
 # Calcular necessidade de calagem com todos os métodos
