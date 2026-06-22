@@ -7,7 +7,7 @@ Authors@R:
       given   = "GEMS",
       family  = "Research Group",
       role    = c("aut", "cre"),
-      email   = "gustavooliveira@academico.ufs.br",
+      email   = "contato@gems.agro.br",
       comment = c(ORCID = "")
     )
 Description: 

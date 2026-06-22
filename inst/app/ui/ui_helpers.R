@@ -144,6 +144,40 @@ estilos_css <- function() {
 
   .card-body-custom { padding: 16px; }
 
+  /* NÍVEL TECNOLÓGICO — checklist retrátil */
+  .nivel-tec-details summary.nivel-tec-summary {
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--verde-medio);
+    padding: 6px 0;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    user-select: none;
+    transition: color 0.15s;
+  }
+  .nivel-tec-details summary.nivel-tec-summary::-webkit-details-marker { display: none; }
+  .nivel-tec-details summary.nivel-tec-summary::marker { content: ''; }
+  .nivel-tec-details summary.nivel-tec-summary:hover { color: var(--verde-escuro); }
+  .nivel-tec-details summary.nivel-tec-summary::before {
+    content: '\25B8';
+    font-size: 10px;
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  .nivel-tec-details[open] summary.nivel-tec-summary::before { transform: rotate(90deg); }
+  .nivel-tec-checklist {
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 6px 6px 2px 2px;
+    border-top: 1px solid #EEE;
+    margin-top: 4px;
+  }
+  .nivel-tec-checklist::-webkit-scrollbar { width: 5px; }
+  .nivel-tec-checklist::-webkit-scrollbar-thumb { background: #D5D5D5; border-radius: 3px; }
+
   /* FORM GROUPS */
   .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
   .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }

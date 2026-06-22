@@ -156,39 +156,84 @@ server <- function(input, output, session) {
   })
 
   # --------------------------------------------------------------------------
-  # NÍVEL TECNOLÓGICO
+  # NÍVEL TECNOLÓGICO — componente compacto (resumo fixo + checklist retrátil)
   # --------------------------------------------------------------------------
 
-  # Renderiza o checklist agrupado por categoria
+  # Reativo: itens marcados
+  rv_tratos_marcados <- reactive({
+    ids <- sapply(CHECKLIST_TRATOS, function(x) x$id)
+    ids[sapply(ids, function(id) {
+      v <- input[[paste0("trato_", id)]]
+      !is.null(v) && isTRUE(v)
+    })]
+  })
+
+  # Reativo: classificação do nível
+  rv_nivel_tec <- reactive({
+    classificar_nivel(rv_tratos_marcados())
+  })
+
+  # Resumo fixo: nível + barra + contagem (sempre visível, compacto)
+  output$resumo_nivel_tec <- renderUI({
+    res  <- rv_nivel_tec()
+    marc <- length(rv_tratos_marcados())
+    tot  <- length(CHECKLIST_TRATOS)
+
+    div(style = "display:flex; align-items:center; gap:10px;",
+      # Selo circular do nível
+      div(style = paste0(
+            "flex-shrink:0; width:42px; height:42px; border-radius:50%; ",
+            "background:", res$cor, "; display:flex; align-items:center; ",
+            "justify-content:center; color:white; font-weight:700; font-size:13px; ",
+            "box-shadow:0 2px 6px ", res$cor, "55;"),
+        paste0(res$pct, "%")
+      ),
+      div(style = "flex:1; min-width:0;",
+        div(style = paste0("font-size:12.5px; font-weight:700; color:", res$cor, ";"),
+          res$nivel_label
+        ),
+        div(style = "background:#E8E8E8; border-radius:3px; height:5px; margin:3px 0 2px;",
+          div(style = paste0("background:", res$cor, "; width:", res$pct, "%; ",
+                              "height:5px; border-radius:3px; transition:width 0.35s;"))
+        ),
+        div(style = "font-size:10px; color:#999;",
+          paste0(marc, " de ", tot, " pr\u00e1ticas adotadas")
+        )
+      )
+    )
+  })
+
+  # Checklist completo — renderiza uma vez, fica dentro de <details> no UI
   output$checklist_tratos_ui <- renderUI({
     cats <- categorias_checklist()
     tagList(lapply(cats, function(cat_group) {
-      div(style = "margin-bottom:10px;",
-        div(style = paste0("font-size:10px; font-weight:700; color:#1B3A2D; ",
-                            "text-transform:uppercase; letter-spacing:0.4px; ",
-                            "margin-bottom:5px; padding-bottom:3px; ",
-                            "border-bottom:1px solid #E8E8E8;"),
+      div(style = "margin-bottom:8px;",
+        div(style = paste0(
+              "font-size:9.5px; font-weight:700; color:#7A8A7E; ",
+              "text-transform:uppercase; letter-spacing:0.5px; ",
+              "margin:8px 0 4px;"),
           cat_group$cat
         ),
         lapply(cat_group$itens, function(item) {
-          div(style = "display:flex; align-items:flex-start; gap:8px; margin-bottom:6px;",
-            div(style = "padding-top:1px;",
-              checkboxInput(
-                inputId = paste0("trato_", item$id),
-                label   = NULL,
-                value   = FALSE,
-                width   = "20px"
-              )
+          tags$label(
+            style = paste0("display:flex; align-items:flex-start; gap:7px; ",
+                            "padding:3px 4px; margin-bottom:1px; border-radius:4px; ",
+                            "cursor:pointer; font-weight:400;"),
+            onmouseover = "this.style.background='#F4F6F4'",
+            onmouseout  = "this.style.background='transparent'",
+            tags$input(
+              type = "checkbox",
+              id   = paste0("trato_", item$id),
+              style = "margin-top:2px; accent-color:#2D6A4F; cursor:pointer; flex-shrink:0;"
             ),
-            div(style = "font-size:12px; color:#444; line-height:1.4;",
-              item$label,
-              span(style = paste0("font-size:9px; font-weight:700; margin-left:4px; ",
-                                   "padding:1px 5px; border-radius:10px; ",
-                                   "background:", if(item$nivel_min=="alto") "#E3F2FD"
-                                                  else "#E8F5E9", "; ",
-                                   "color:", if(item$nivel_min=="alto") "#1565C0"
-                                              else "#2E7D32", ";"),
-                if(item$nivel_min=="alto") "Alta" else "M\u00e9dia"
+            tags$span(style = "font-size:11.5px; color:#444; line-height:1.35;",
+              item$label, " ",
+              tags$span(style = paste0(
+                  "font-size:8.5px; font-weight:700; padding:0px 5px; ",
+                  "border-radius:8px; white-space:nowrap; ",
+                  "background:", if(item$nivel_min=="alto") "#E3F2FD" else "#E8F5E9", "; ",
+                  "color:", if(item$nivel_min=="alto") "#1565C0" else "#2E7D32", ";"),
+                if(item$nivel_min=="alto") "ALTA" else "M\u00c9DIA"
               )
             )
           )
@@ -197,72 +242,31 @@ server <- function(input, output, session) {
     }))
   })
 
-  # Reativo: itens marcados
-  rv_tratos_marcados <- reactive({
-    ids <- sapply(CHECKLIST_TRATOS, function(x) x$id)
-    marcados <- ids[sapply(ids, function(id) {
-      v <- input[[paste0("trato_", id)]]
-      !is.null(v) && isTRUE(v)
-    })]
-    marcados
-  })
-
-  # Reativo: classificação do nível
-  rv_nivel_tec <- reactive({
-    classificar_nivel(rv_tratos_marcados())
-  })
-
-  # Badge no cabeçalho do card
+  # Badge no cabeçalho do card (compacto, ao lado do título)
   output$badge_nivel_tec <- renderUI({
     res <- rv_nivel_tec()
-    span(style = paste0("margin-left:8px; padding:2px 10px; border-radius:12px; ",
-                         "font-size:10px; font-weight:700; color:white; ",
-                         "background:", res$cor, ";"),
+    span(style = paste0("margin-left:auto; padding:2px 9px; border-radius:10px; ",
+                         "font-size:9.5px; font-weight:700; color:white; ",
+                         "background:", res$cor, "; white-space:nowrap;"),
       res$nivel_label
     )
   })
 
-  # Card de resultado da classificação
+  # Card de justificativa técnica — só aparece quando nível ≠ médio
   output$resultado_nivel_tec <- renderUI({
-    res  <- rv_nivel_tec()
-    marc <- length(rv_tratos_marcados())
-    tot  <- length(CHECKLIST_TRATOS)
-
-    # Barra de progresso
-    pct_bar <- res$pct
-
-    div(style = paste0("background:", res$cor, "15; border:1.5px solid ", res$cor,
-                        "60; border-radius:8px; padding:10px 14px; margin-top:10px;"),
-      # Nível + pontuação
-      div(style = "display:flex; align-items:center; justify-content:space-between;",
-        div(
-          span(style = paste0("font-size:13px; font-weight:700; color:", res$cor, ";"),
-            res$nivel_label),
-          span(style = "font-size:10px; color:#888; margin-left:6px;",
-            paste0(marc, "/", tot, " pr\u00e1ticas marcadas"))
-        ),
-        span(style = paste0("font-size:16px; font-weight:700; color:", res$cor, ";"),
-          paste0(pct_bar, "%")
-        )
-      ),
-      # Barra de progresso
-      div(style = "background:#E0E0E0; border-radius:4px; height:6px; margin:8px 0;",
-        div(style = paste0("background:", res$cor, "; width:", pct_bar, "%; ",
-                            "height:6px; border-radius:4px; transition:width 0.4s;"))
-      ),
-      # Descrição
-      p(style = "font-size:11px; color:#555; margin:4px 0 0;", res$descricao),
-      # Fatores de ajuste
-      if (res$nivel != "medio") {
-        f <- FATORES_NIVEL
-        div(style = "font-size:10px; color:#777; margin-top:6px; font-style:italic;",
-          HTML(paste0('<i class="bi bi-sliders"></i> Ajuste aplicado: ',
-                       'N plantio \u00d7', f$n_plantio[[res$nivel]],
-                       ', N cobertura \u00d7', f$n_cobertura[[res$nivel]],
-                       ', P\u2082O\u2085 \u00d7', f$p2o5[[res$nivel]],
-                       ', K\u2082O \u00d7', f$k2o[[res$nivel]]))
-        )
-      }
+    res <- rv_nivel_tec()
+    if (res$nivel == "medio") return(NULL)
+    f <- FATORES_NIVEL
+    div(style = paste0("font-size:10.5px; color:#666; background:", res$cor, "0D; ",
+                        "border-left:3px solid ", res$cor, "; padding:6px 10px; ",
+                        "border-radius:0 6px 6px 0; margin-top:8px; line-height:1.5;"),
+      HTML(paste0(
+        '<i class="bi bi-sliders"></i> <b>Ajuste de dose aplicado: </b>',
+        'N plantio \u00d7', f$n_plantio[[res$nivel]],
+        ', N cobertura \u00d7', f$n_cobertura[[res$nivel]],
+        ', P\u2082O\u2085 \u00d7', f$p2o5[[res$nivel]],
+        ', K\u2082O \u00d7', f$k2o[[res$nivel]]
+      ))
     )
   })
 
@@ -990,23 +994,6 @@ server <- function(input, output, session) {
                 mk_metric(m$valor, "mg/dm\u00b3", nm, m$interp$classe, m$interp$cor)
               }
             })
-          )
-        )
-      },
-
-      # ── Estádio Fenológico (milho) ──────────────────────────────────────
-      if (rec$cultura == "milho") {
-        fenol_res <- fenologia_milho(
-          n_cobertura = rec$adubacao$N_cobertura,
-          n_plantio   = rec$adubacao$N_plantio
-        )
-        tagList(
-          div(class = "result-card",
-            div(class = "result-card-title",
-              HTML('<i class="bi bi-flower1"></i> Est\u00e1dio Fenol\u00f3gico \u2014 Momento de Aplica\u00e7\u00e3o de N')),
-            p(style = "font-size:12px;color:#555;margin-bottom:12px;",
-              HTML(fenol_res$descricao)),
-            HTML(fenol_res$svg)
           )
         )
       },

@@ -303,21 +303,26 @@ ui <- fluidPage(
         )
       ),
       
-      # NÍVEL TECNOLÓGICO — checklist interativo
+      # NÍVEL TECNOLÓGICO — resumo compacto + checklist retrátil
       div(class = "card-section",
-        div(class = "card-header",
-          HTML('<i class="bi bi-award"></i> N\u00edvel Tecnol\u00f3gico do Sistema de Produ\u00e7\u00e3o'),
-          # Badge mostrando nível atual
+        div(class = "card-header-custom", style = "display:flex; align-items:center;",
+          HTML('<i class="bi bi-award"></i> N\u00edvel Tecnol\u00f3gico'),
           uiOutput("badge_nivel_tec", inline = TRUE)
         ),
-        div(class = "card-body",
-          p(style = "font-size:11px; color:#888; margin-bottom:10px;",
-            HTML('<i class="bi bi-info-circle"></i> Marque as pr\u00e1ticas adotadas na propriedade. ',
-                 'O app classifica automaticamente o n\u00edvel e ajusta as doses de NPK.')),
-          # Checklist gerado dinamicamente
-          uiOutput("checklist_tratos_ui"),
-          # Resultado da classificação
-          uiOutput("resultado_nivel_tec")
+        div(class = "card-body-custom", style = "padding-top:12px;",
+          # Resumo sempre visível (selo + barra de progresso)
+          uiOutput("resumo_nivel_tec"),
+          # Justificativa de ajuste (só aparece se nível != médio)
+          uiOutput("resultado_nivel_tec"),
+          # Checklist completo — retrátil, fechado por padrão
+          tags$details(class = "nivel-tec-details", style = "margin-top:10px;",
+            tags$summary(class = "nivel-tec-summary",
+              HTML('<i class="bi bi-sliders2-vertical"></i> Editar pr\u00e1ticas adotadas')
+            ),
+            div(class = "nivel-tec-checklist",
+              uiOutput("checklist_tratos_ui")
+            )
+          )
         )
       ),
 
