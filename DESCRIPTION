@@ -1,7 +1,7 @@
 Package: GEMSFertilizer
 Title: Sistema de Recomendacao de Adubacao e Calagem para Culturas Agricolas
 Version: 0.5.0
-Date: 2026-06-18
+Date: 2026-06-22
 Authors@R: 
     person(
       given   = "GEMS",
